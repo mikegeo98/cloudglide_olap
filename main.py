@@ -205,8 +205,7 @@ def main():
                 f"Avg Cost = {comp['avg_cost']} (Expected = {comp['expected_cost']}), "
                 f"Within tolerance = {comp['within_tolerance']}\033[0m")
             
-    if benchmark_single_query:
-        # Load per-query benchmark data from CSV
+
         def load_simulation_results(simulation_csv_path: str) -> dict:
             """
             Load simulation results from CSV and return a dictionary keyed by (database_id, query_id).

@@ -104,6 +104,8 @@ def schedule_jobs(
                                                  average query latency, average query with queueing latency,
                                                  and total price.
     """
+    print("test2")
+    
     # Unpack execution parameters
     scheduling, scaling, nodes, cpu_cores, io_bandwidth, max_jobs, vpu, network_bandwidth, memory_bandwidth, memoryz, cold_start, hit_rate = execution_params
 
@@ -293,10 +295,10 @@ def schedule_jobs(
 
         # Sleep to simulate real-time passage if needed
         time.sleep(simulation_params[1])
-
+    
     # Write finished jobs to CSV
     finished_jobs.sort(key=lambda job: job.start)
-    write_to_csv(output_file, finished_jobs)
+
 
     # Calculate total price based on architecture
     if architecture in [0, 1]:
@@ -312,6 +314,7 @@ def schedule_jobs(
         else:
             total_price = 0.0  # Default case
 
+    write_to_csv(output_file, finished_jobs, total_price)
     logging.info(f"Total Price: {total_price}")
 
     # Process simulation results

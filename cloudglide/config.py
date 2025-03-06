@@ -46,5 +46,13 @@ DEFAULT_MAX_DURATION = 108000  # in seconds
 
 # Dataset file paths
 DATASET_FILES = {
+    1: 'cloudglide/datasets/cab_10_4.csv',
+    3: 'cloudglide/datasets/cab_10_20.csv',
+    16: 'cloudglide/datasets/qs0_40_4f.csv',
+    17: 'cloudglide/datasets/qs1_40_4f.csv',
+    18: 'cloudglide/datasets/qs2_40_4f.csv',
+    19: 'cloudglide/datasets/qs3_40_4f.csv',
+    20: 'cloudglide/datasets/qs4_40_4f.csv',
+    21: 'cloudglide/datasets/pattern_2_50f.csv',
     999: 'cloudglide/datasets/tpch_all_runs.csv'
 }
