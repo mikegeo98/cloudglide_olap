@@ -267,6 +267,6 @@ class Autoscaler:
                 # elif len(cpu_jobs) < 0.2 * cpu_cores and cpu_cores > base_cores + 4:
                 #     self.scale_in(4)
         vpu, cpu_cores = self.reset_scaling_flag_ec(vpu, cpu_cores, base_cores,
-                                                    current_second, second_range)
+                                                    second_range)
 
         return vpu, cpu_cores

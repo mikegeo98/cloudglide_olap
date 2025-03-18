@@ -3,7 +3,7 @@ import os
 import sys
 import matplotlib.pyplot as plt
 import pandas as pd
-from use_cases_visual import process_and_plot_scheduling,process_and_plot_queueing, process_and_plot_scaling_options, process_and_plot_scaling_algorithms, process_and_plot_caching
+from use_cases_visual import process_and_plot_scheduling,process_and_plot_queueing, process_and_plot_scaling_options, process_and_plot_scaling_algorithms, process_and_plot_caching, tpch_results, process_and_plot_workload_pattern_1, process_and_plot_workload_pattern_2, process_and_plot_workload_pattern_3, process_and_plot_workload_pattern_4, process_and_plot_workload_pattern_5
 
 
 def run_example(test_case_keyword, json_file_path, output_prefix=None,
@@ -53,6 +53,44 @@ def run_example(test_case_keyword, json_file_path, output_prefix=None,
         print("Return code:", e.returncode)
         print("Output:", e.output)
         return None
+
+##############################################################################
+# Evaluation 1: TPC-H
+##############################################################################
+
+def tpch():
+    """
+    Reproduce the scheduling use case:
+    1) scheduling_4_nodes
+    2) scheduling_2_nodes
+    Then process the output CSV files for plotting or analysis.
+    """
+    # Example 1A: scheduling_4_nodes
+    prefix = "cloudglide/output_simulation/tpch"
+    run_example("tpch_all",
+                "cloudglide/simulations/tpch.json",
+                output_prefix=prefix)
+    # Suppose you know which CSVs get produced:
+    output_files = [
+        f'{prefix}_1.csv',
+        f'{prefix}_2.csv',
+        f'{prefix}_3.csv',
+        f'{prefix}_4.csv'
+    ]
+    tpch_results()  # call your old plotting function
+
+    # Example 1B: scheduling_2_nodes
+    prefix = "cloudglide/output_simulation/scheduling_2_nodes"
+    run_example("scheduling_2_nodes",
+                "cloudglide/simulations/use_cases.json",
+                output_prefix=prefix)
+    output_files = [
+        f'{prefix}_1.csv',
+        f'{prefix}_2.csv',
+        f'{prefix}_3.csv',
+        f'{prefix}_4.csv'
+    ]
+    process_and_plot_scheduling(output_files, 1)
 
 ##############################################################################
 # Example 1: Scheduling
@@ -150,8 +188,7 @@ def caching():
         f'{prefix}_1.csv',
         f'{prefix}_2.csv',
         f'{prefix}_3.csv',
-        f'{prefix}_4.csv',
-        f'{prefix}_5.csv'
+        f'{prefix}_4.csv'
     ]
     
     process_and_plot_caching(output_files)
@@ -207,24 +244,82 @@ def spot():
 
 def workload_patterns():
     """
-    Run workload_patterns scenario and do custom plotting logic.
-    """
-    prefix = "cloudglide/output_simulation/workload_patterns"
-    run_example("workload_patterns",
-                "cloudglide/simulations/use_cases.json",
-                output_prefix=prefix)
+    Dynamically handle different workload patterns producing different numbers
+    of CSV files for each config.
 
-    output_file = f'{prefix}_1.csv'
-    if os.path.exists(output_file):
-        data = pd.read_csv(output_file)
-        plt.plot(data['Column1'], data['Column2'], label='Workload Patterns')
-        plt.title("Plot for Workload Patterns")
-        plt.xlabel('X-axis Label')
-        plt.ylabel('Y-axis Label')
-        plt.legend()
-        plt.savefig(f"{prefix}_plot.png")
-        plt.close()
-        print(f"[INFO] Plot saved as {prefix}_plot.png.")
+    We'll define a dictionary that maps (pattern_prefix, config) -> number_of_files
+    so you can easily control how many CSVs each scenario yields.
+    """
+
+    # 1) Define your patterns and the function that will plot them
+    patterns = [
+        ("p1", process_and_plot_workload_pattern_1),
+        ("p2", process_and_plot_workload_pattern_2),
+        ("p3", process_and_plot_workload_pattern_3),
+        ("p4", process_and_plot_workload_pattern_4),
+        ("p5", process_and_plot_workload_pattern_5),
+    ]
+
+    # 2) A dictionary controlling how many CSVs each (pattern, config) produces
+    #    For example, p1_dwaas: 8 CSVs, p1_ep: 3 CSVs, etc.
+    #    The defaults below are just examples – change them to match your real outputs!
+    num_csv_map = {
+        ("p1", "dwaas"): 8,
+        ("p1", "ep"): 3,
+        ("p1", "qaas"): 1,
+
+        ("p2", "dwaas"): 8,
+        ("p2", "ep"): 6,   # e.g. p2 has 6 CSV for EP
+        ("p2", "qaas"): 1,
+
+        ("p3", "dwaas"): 8,
+        ("p3", "ep"): 6,   # e.g. p3 also has 6 CSV for EP
+        ("p3", "qaas"): 1,
+
+        ("p4", "dwaas"): 8,
+        ("p4", "ep"): 3,
+        ("p4", "qaas"): 1,
+
+        ("p5", "dwaas"): 8,
+        ("p5", "ep"): 4,   # e.g. p5 has 4 CSV for EP
+        ("p5", "qaas"): 1,
+    }
+
+    # 3) The prefix used for all output paths
+    base_prefix = "cloudglide/output_simulation/workload_pattern_"
+
+    # 4) The different config suffixes we want to run
+    configs = ["dwaas", "ep", "qaas"]
+
+    for pattern_prefix, plot_function in patterns:
+        # For each config, run the example
+        for config in configs:
+            # Compose the final prefix, e.g. "cloudglide/output_simulation/workload_pattern_p1_dwaas"
+            out_prefix = f"{base_prefix}{pattern_prefix}_{config}"
+
+            # Run the simulation, e.g. "p1_dwaas"
+            scenario_key = f"{pattern_prefix}_{config}"
+
+            # Actually run the scenario
+            run_example(scenario_key, "cloudglide/simulations/use_cases.json", output_prefix=out_prefix)
+
+        # Now build the combined list of output CSVs for each config
+        output_files = []
+        for config in configs:
+            # How many CSV files does this pattern/config produce?
+            n_csv = num_csv_map.get((pattern_prefix, config), 0)
+            # If not found, it returns 0, or you can raise an error if it's mandatory
+
+            # For each file index, create the path, e.g. "prefix_1.csv"
+            out_prefix = f"{base_prefix}{pattern_prefix}_{config}"
+            for i in range(1, n_csv + 1):
+                csv_path = f"{out_prefix}_{i}.csv"
+                output_files.append(csv_path)
+
+        # At this point, output_files is a single combined list for all 3 configs
+        # If you prefer separate lists, handle them differently
+        # Finally, call your plotting function
+        plot_function(output_files)
 
 ##############################################################################
 # Example 8: Granular Autoscaling
@@ -271,6 +366,8 @@ if __name__ == "__main__":
         queueing()
     elif example_name == "scaling_options":
         scaling_options()
+    elif example_name == "tpch":
+        tpch()
     elif example_name == "caching":
         caching()
     elif example_name == "scaling_algorithms":
