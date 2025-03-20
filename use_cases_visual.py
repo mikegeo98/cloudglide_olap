@@ -43,6 +43,30 @@ def get_latency_data_from_files(output_files):
 
     return data1
 
+def get_io_latency_data_from_files(output_files):
+
+    data1 = []
+
+    for file in output_files:
+        # Read the CSV file into a DataFrame
+        df = pd.read_csv(file)
+        
+        # Calculate the average query duration and query duration with queueing
+        avg_query_exec_time = df['I/O'].mean()
+        avg_query_exec_time_queueing = df['query_duration_with_queue'].mean()
+
+        # If 'mon_cost' is the same in every row, we can just take the first value
+        # or do df['mon_cost'].mean() if it might vary a bit.
+        if 'mon_cost' in df.columns:
+            mon_cost_value = df['mon_cost'].iloc[0]
+        else:
+            mon_cost_value = None  # or 0, or handle as needed
+
+        # Append the [avg_duration, avg_duration_with_queue, mon_cost] for each file
+        data1.append([avg_query_exec_time, avg_query_exec_time_queueing, mon_cost_value])
+
+    return data1
+
 # Function to plot scheduling data
 def process_and_plot_scheduling(output_files, title):
     algorithms = ['FCFS', 'SJF', 'LJF', 'MLQ']
@@ -95,7 +119,7 @@ def process_and_plot_scheduling(output_files, title):
 
     # Show the plot
     # plt.show()
-    print(f"Plot saved as cloudglide/output_visual/scheduling.png")
+    print(f"Plot saved as cloudglide/output_visual/scheduling_algorithm.png")
 
 
 # Function to process input files and return the data for plotting
@@ -228,7 +252,9 @@ def process_and_plot_scaling_options(output_files):
     plt.savefig('cloudglide/output_visual/scaling_options.png', dpi=300)
 
     # Display the plot
-    plt.show()
+    # plt.show()
+    print(f"Plot saved as cloudglide/output_visual/scaling_options.png")
+
 
 # Function to process input files and return the data for plotting
 def process_and_plot_scaling_algorithms(output_files):   
@@ -288,11 +314,13 @@ def process_and_plot_scaling_algorithms(output_files):
     plt.savefig('cloudglide/output_visual/scaling_algorithms.png', dpi=300)
 
     # Show the plot
-    plt.show()
+    # plt.show()
+    print(f"Plot saved as cloudglide/output_visual/scaling_algorithms.png")
+
     
-def process_and_plot_cold_starts(results):
+def process_and_plot_cold_starts(output_files):
     
-    print(results)
+    results = get_latency_data_from_files(output_files)
 
     # Extract latencies and costs from the data
     latencies1 = [entry[1] for entry in results[0:2]]
@@ -380,11 +408,13 @@ def process_and_plot_cold_starts(results):
     plt.tight_layout()
     
     plt.savefig('cloudglide/output_visual/cold_starts.png', dpi=300)
-    plt.show()
+    # plt.show()
+    print(f"Plot saved as cloudglide/output_visual/cold_starts.png")
+
     
 def process_and_plot_caching(output_files):
     # Extract latencies and costs from the data
-    result = get_latency_data_from_files(output_files)
+    result = get_io_latency_data_from_files(output_files)
 
     latencies1 = [entry[0] for entry in result]
     costs1 = [entry[2] for entry in result]
@@ -424,8 +454,8 @@ def process_and_plot_caching(output_files):
     plt.grid(True, alpha=0.3)
 
     # Set the axis limits and ensure equal scaling
-    plt.xlim(left=0, right=24)
-    plt.ylim(bottom=0, top=16)
+    plt.xlim(left=0, right=7)
+    plt.ylim(bottom=0, top=10)
 
     # Set tick label sizes
     plt.xticks(fontsize=26)
@@ -512,14 +542,17 @@ def process_and_plot_workload_pattern_1(output_files):
 
     # Optional: x/y limits
     ax.set_xlim(0, 15)
-    ax.set_ylim(0, 27)
+    ax.set_ylim(0, 40)
 
     # Example legend usage (commented out)
     # ax.legend(['DWaaS','DWaaS Autoscaling','Elastic Pool','QaaS'],
     #           fontsize=24, loc='best')
 
     plt.tight_layout()
-    plt.show()
+    # plt.show()
+    plt.savefig('cloudglide/output_visual/pattern1.png', dpi=300)
+    print(f"Plot saved as cloudglide/output_visual/pattern1.png")
+
       
 def process_and_plot_workload_pattern_2(output_files):
 
@@ -584,7 +617,10 @@ def process_and_plot_workload_pattern_2(output_files):
     ax.set_ylim(0,85)
 
     plt.tight_layout()
-    plt.show()
+    # plt.show()
+    plt.savefig('cloudglide/output_visual/pattern2.png', dpi=300)
+    print(f"Plot saved as cloudglide/output_visual/pattern2.png")
+
     
 def process_and_plot_workload_pattern_3(output_files):
 
@@ -647,7 +683,10 @@ def process_and_plot_workload_pattern_3(output_files):
     plt.ylim(bottom=0, top=85)
 
     plt.tight_layout()
-    plt.show()
+    # plt.show()
+    plt.savefig('cloudglide/output_visual/pattern3.png', dpi=300)
+    print(f"Plot saved as cloudglide/output_visual/pattern3.png")
+
     
 def process_and_plot_workload_pattern_4(output_files):
 
@@ -719,7 +758,10 @@ def process_and_plot_workload_pattern_4(output_files):
     ax.set_ylim(0,27)
 
     plt.tight_layout()
-    plt.show()
+    # plt.show()
+    plt.savefig('cloudglide/output_visual/pattern4.png', dpi=300)
+    print(f"Plot saved as cloudglide/output_visual/pattern4.png")
+
     
 def process_and_plot_workload_pattern_5(output_files):
     
@@ -813,12 +855,12 @@ def process_and_plot_workload_pattern_5(output_files):
     # ax.legend(['DWaaS','DWaaS A/S','Elastic Pool','QaaS'], fontsize=20, loc='best')
 
     ax.set_xlim(0,25)
-    ax.set_ylim(0,27)
+    ax.set_ylim(0,57)
 
     plt.tight_layout()
-    plt.show()
-
-
+    # plt.show()
+    plt.savefig('cloudglide/output_visual/pattern5.png', dpi=300)
+    print(f"Plot saved as cloudglide/output_visual/pattern5.png")
 
 def tpch_results():
     # Create the output directory if it doesn't exist
@@ -1116,29 +1158,38 @@ def tpch_results():
     print("Done.")
     
     
-def plot_concurrency():
-    
+def plot_concurrency(output_file):
+    """
+    Plots concurrency vs. execution time using hard-coded 'measured' data,
+    and 'ideal_linear' read from the CSV at specific row indices.
+    """
     # Set up Seaborn for a polished look with larger fonts
     sns.set_theme(style='whitegrid', context='paper', font_scale=3)
     
     # Concurrency from 1 to 10
-    concurrency_levels = np.arange(1, 11)
-
-    # Approximate per-query times from your figure
-    # Ideal (Linear): 3 sec * N
-    ideal_linear = np.array([3.0, 6.0, 9.0, 12.0, 15.0, 18.0, 21.0, 24.0, 27.0, 30.0])
-    # Measured times for Q1 SF=10
-    measured = np.array([3.1, 5.6, 8.4, 11.2, 13.5, 17.1, 19.2, 22.0, 24.5, 27.0])
+    concurrency_levels = np.arange(1, 9)
+    
+    # Rows in your CSV to extract
+    row_indices = [0, 2, 3, 5, 8, 14, 19, 24]
+    
+    # Read the CSV file
+    df = pd.read_csv(output_file)
+    
+    # Extract the 'query_duration_with_queue' column from these row indices
+    ideal_linear = df.loc[row_indices, 'query_duration_with_queue'].values
+    
+    # Measured times for Q1 SF=10 (kept as a hard-coded example)
+    measured = np.array([3.1, 5.6, 8.4, 11.2, 13.5, 17.1, 19.2, 23])
     
     # Create figure with dimensions 8x4 inches
     fig, ax = plt.subplots(figsize=(8, 4))
 
-    # Plot Ideal (Linear)
+    # Plot "ideal_linear" (from CSV)
     ax.plot(concurrency_levels, ideal_linear, 
             marker='o', markersize=12, linestyle='--', linewidth=3.0, 
             color='magenta', label='CloudGlide')
 
-    # Plot Measured
+    # Plot Measured (remains hard-coded)
     ax.plot(concurrency_levels, measured, 
             marker='s', markersize=10, linestyle='-', linewidth=3.0, 
             color='black', label='Measured')
@@ -1146,8 +1197,7 @@ def plot_concurrency():
     # Configure axes
     ax.set_xticks(concurrency_levels)
     ax.set_xlabel('Concurrent Queries (N)', fontsize=28)
-    ax.set_ylabel('Per-Query \n Ex. Time(sec)', fontsize=28)
-#     ax.set_title('TPC-H Q1 Concurrency Model', fontsize=28)
+    ax.set_ylabel('Per-Query \nEx. Time (sec)', fontsize=28)
 
     # Increase tick label font sizes
     ax.tick_params(axis='both', which='major', labelsize=28)
@@ -1163,4 +1213,5 @@ def plot_concurrency():
     ax.legend(loc='upper left', fontsize=23, frameon=False)
 
     plt.tight_layout()
-    plt.show()
+    plt.savefig('cloudglide/output_visual/concurrency.png', dpi=300)
+    print("Plot saved as cloudglide/output_visual/concurrency.png")

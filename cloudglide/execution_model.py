@@ -110,7 +110,7 @@ def schedule_jobs(
     scheduling, scaling, nodes, cpu_cores, io_bandwidth, max_jobs, vpu, network_bandwidth, memory_bandwidth, memoryz, cold_start, hit_rate = execution_params
 
     # Define iteration unit (simulation step)
-    second_range = 1 
+    second_range = 0.1 
 
     # Initialize Autoscaler if needed
     autoscaler = Autoscaler(cold_start, second_range) if architecture in [1, 2] else None

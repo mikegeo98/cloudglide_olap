@@ -3,7 +3,7 @@ import os
 import sys
 import matplotlib.pyplot as plt
 import pandas as pd
-from use_cases_visual import process_and_plot_scheduling,process_and_plot_queueing, process_and_plot_scaling_options, process_and_plot_scaling_algorithms, process_and_plot_caching, tpch_results, process_and_plot_workload_pattern_1, process_and_plot_workload_pattern_2, process_and_plot_workload_pattern_3, process_and_plot_workload_pattern_4, process_and_plot_workload_pattern_5
+from use_cases_visual import process_and_plot_scheduling, process_and_plot_scaling_options, process_and_plot_scaling_algorithms, process_and_plot_caching, tpch_results, process_and_plot_workload_pattern_1, process_and_plot_workload_pattern_2, process_and_plot_workload_pattern_3, process_and_plot_workload_pattern_4, process_and_plot_workload_pattern_5, process_and_plot_cold_starts, plot_concurrency
 
 
 def run_example(test_case_keyword, json_file_path, output_prefix=None,
@@ -79,21 +79,8 @@ def tpch():
     ]
     tpch_results()  # call your old plotting function
 
-    # Example 1B: scheduling_2_nodes
-    prefix = "cloudglide/output_simulation/scheduling_2_nodes"
-    run_example("scheduling_2_nodes",
-                "cloudglide/simulations/use_cases.json",
-                output_prefix=prefix)
-    output_files = [
-        f'{prefix}_1.csv',
-        f'{prefix}_2.csv',
-        f'{prefix}_3.csv',
-        f'{prefix}_4.csv'
-    ]
-    process_and_plot_scheduling(output_files, 1)
-
 ##############################################################################
-# Example 1: Scheduling
+# Example 2: Scheduling
 ##############################################################################
 
 def scheduling():
@@ -129,24 +116,6 @@ def scheduling():
         f'{prefix}_4.csv'
     ]
     process_and_plot_scheduling(output_files, 1)
-
-##############################################################################
-# Example 2: Queueing
-##############################################################################
-
-def queueing():
-    """
-    Reproduce the queueing_effect use case and plot/visualize results.
-    """
-    prefix = "cloudglide/output_simulation/queueing_effect"
-    run_example("queueing_effect",
-                "cloudglide/simulations/use_cases.json",
-                output_prefix=prefix)
-    output_files = [
-        f'{prefix}_1.csv',
-        # Adjust as needed for however many combos get produced
-    ]
-    process_and_plot_queueing(output_files)
 
 ##############################################################################
 # Example 3: Scaling Options
@@ -214,32 +183,7 @@ def scaling_algorithms():
     process_and_plot_scaling_algorithms(output_files)
 
 ##############################################################################
-# Example 6: Spot
-##############################################################################
-
-def spot():
-    """
-    Run spot scenario and do custom plotting logic.
-    """
-    prefix = "cloudglide/output_simulation/spot"
-    run_example("spot",
-                "cloudglide/simulations/use_cases.json",
-                output_prefix=prefix)
-
-    output_file = f'{prefix}_1.csv'
-    if os.path.exists(output_file):
-        data = pd.read_csv(output_file)
-        plt.plot(data['Column1'], data['Column2'], label='Spot')
-        plt.title("Plot for Spot Instances")
-        plt.xlabel('X-axis Label')
-        plt.ylabel('Y-axis Label')
-        plt.legend()
-        plt.savefig(f"{prefix}_plot.png")
-        plt.close()
-        print(f"[INFO] Plot saved as {prefix}_plot.png.")
-
-##############################################################################
-# Example 7: Workload Patterns
+# Example 6: Workload Patterns
 ##############################################################################
 
 def workload_patterns():
@@ -321,31 +265,38 @@ def workload_patterns():
         # Finally, call your plotting function
         plot_function(output_files)
 
-##############################################################################
-# Example 8: Granular Autoscaling
-##############################################################################
 
-def granular_autoscaling():
-    """
-    Run granular_autoscaling scenario and do custom plotting logic.
-    """
-    prefix = "cloudglide/output_simulation/granular_autoscaling"
-    run_example("granular_autoscaling",
+# Example 7: Cold Starts
+def cold_starts():
+    
+    prefix = "cloudglide/output_simulation/cold"
+    run_example("cold_starts",
                 "cloudglide/simulations/use_cases.json",
                 output_prefix=prefix)
+    
+    output_files = [
+        f'{prefix}_1.csv',
+        f'{prefix}_2.csv',
+        f'{prefix}_3.csv',
+        f'{prefix}_4.csv',
+        f'{prefix}_5.csv',
+        f'{prefix}_6.csv',
+        f'{prefix}_7.csv',
+        f'{prefix}_8.csv'
+    ]
+    
+    process_and_plot_cold_starts(output_files)
 
+# Example 8: Concurrency
+def concurrency():
+    prefix = "cloudglide/output_simulation/tpch_concurrency"
+    run_example("tpch_concurrency",
+                "cloudglide/simulations/tpch.json",
+                output_prefix=prefix)
+    # Suppose you know which CSVs get produced:
     output_file = f'{prefix}_1.csv'
-    if os.path.exists(output_file):
-        data = pd.read_csv(output_file)
-        plt.plot(data['Column1'], data['Column2'], label='Granular Autoscaling')
-        plt.title("Plot for Granular Autoscaling")
-        plt.xlabel('X-axis Label')
-        plt.ylabel('Y-axis Label')
-        plt.legend()
-        plt.savefig(f"{prefix}_plot.png")
-        plt.close()
-        print(f"[INFO] Plot saved as {prefix}_plot.png.")
-
+    
+    plot_concurrency(output_file)
 
 ##############################################################################
 # Main CLI: Choose which example to run
@@ -354,29 +305,25 @@ def granular_autoscaling():
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python use_cases.py <example_name>")
-        print("Available examples: scheduling, queueing, scaling_options, caching,")
-        print("scaling_algorithms, spot, workload_patterns, granular_autoscaling")
         sys.exit(1)
 
     example_name = sys.argv[1].lower()
 
     if example_name == "scheduling":
         scheduling()
-    elif example_name == "queueing":
-        queueing()
+    elif example_name == "scaling_algorithms":
+        scaling_algorithms()
     elif example_name == "scaling_options":
         scaling_options()
+    elif example_name == "cold_starts":
+        cold_starts()
     elif example_name == "tpch":
         tpch()
     elif example_name == "caching":
         caching()
-    elif example_name == "scaling_algorithms":
-        scaling_algorithms()
-    elif example_name == "spot":
-        spot()
     elif example_name == "workload_patterns":
         workload_patterns()
-    elif example_name == "granular_autoscaling":
-        granular_autoscaling()
+    elif example_name == "concurrency":
+        concurrency()
     else:
         print(f"Example '{example_name}' not recognized.")
