@@ -242,7 +242,7 @@ def simulate_io_elastic_pool(
 
         # Assign memory tier if not already assigned
         if job_key not in job_memory_tiers:
-            job_memory_tiers[job_key] = assign_memory_tier(hit_rate, base_cores, cpu_cores)
+            job_memory_tiers[job_key] = assign_memory_tier(hit_rate)
 
         # Collect job and its memory tier for Phase 2
         memory_tier = job_memory_tiers[job_key]
@@ -581,7 +581,7 @@ def simulate_cpu_autoscaling(
                 shuffle_jobs.remove(job)
 
         # Estimate completion time for each job and update progress
-        for job, cores_assigned in zip(cpu_jobs, core_allocation):
+        for job, cores_assigned in zip(list(cpu_jobs), core_allocation):
             speedup_factor = 1
             if cores_assigned != 0:
                 if cores_assigned > 4:  # Configurable threshold

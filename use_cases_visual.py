@@ -5,6 +5,7 @@ import os
 import matplotlib.cm as cm
 from adjustText import adjust_text
 import matplotlib.lines as mlines
+import seaborn as sns
 
 def get_latency_data_from_files(output_files):
     """
@@ -28,6 +29,30 @@ def get_latency_data_from_files(output_files):
         
         # Calculate the average query duration and query duration with queueing
         avg_query_exec_time = df['query_duration'].mean()
+        avg_query_exec_time_queueing = df['query_duration_with_queue'].mean()
+
+        # If 'mon_cost' is the same in every row, we can just take the first value
+        # or do df['mon_cost'].mean() if it might vary a bit.
+        if 'mon_cost' in df.columns:
+            mon_cost_value = df['mon_cost'].iloc[0]
+        else:
+            mon_cost_value = None  # or 0, or handle as needed
+
+        # Append the [avg_duration, avg_duration_with_queue, mon_cost] for each file
+        data1.append([avg_query_exec_time, avg_query_exec_time_queueing, mon_cost_value])
+
+    return data1
+
+def get_io_latency_data_from_files(output_files):
+
+    data1 = []
+
+    for file in output_files:
+        # Read the CSV file into a DataFrame
+        df = pd.read_csv(file)
+        
+        # Calculate the average query duration and query duration with queueing
+        avg_query_exec_time = df['I/O'].mean()
         avg_query_exec_time_queueing = df['query_duration_with_queue'].mean()
 
         # If 'mon_cost' is the same in every row, we can just take the first value
@@ -94,7 +119,7 @@ def process_and_plot_scheduling(output_files, title):
 
     # Show the plot
     # plt.show()
-    print(f"Plot saved as cloudglide/output_visual/scheduling.png")
+    print(f"Plot saved as cloudglide/output_visual/scheduling_algorithm.png")
 
 
 # Function to process input files and return the data for plotting
@@ -227,7 +252,9 @@ def process_and_plot_scaling_options(output_files):
     plt.savefig('cloudglide/output_visual/scaling_options.png', dpi=300)
 
     # Display the plot
-    plt.show()
+    # plt.show()
+    print(f"Plot saved as cloudglide/output_visual/scaling_options.png")
+
 
 # Function to process input files and return the data for plotting
 def process_and_plot_scaling_algorithms(output_files):   
@@ -287,11 +314,13 @@ def process_and_plot_scaling_algorithms(output_files):
     plt.savefig('cloudglide/output_visual/scaling_algorithms.png', dpi=300)
 
     # Show the plot
-    plt.show()
+    # plt.show()
+    print(f"Plot saved as cloudglide/output_visual/scaling_algorithms.png")
+
     
-def process_and_plot_cold_starts(results):
+def process_and_plot_cold_starts(output_files):
     
-    print(results)
+    results = get_latency_data_from_files(output_files)
 
     # Extract latencies and costs from the data
     latencies1 = [entry[1] for entry in results[0:2]]
@@ -379,11 +408,13 @@ def process_and_plot_cold_starts(results):
     plt.tight_layout()
     
     plt.savefig('cloudglide/output_visual/cold_starts.png', dpi=300)
-    plt.show()
+    # plt.show()
+    print(f"Plot saved as cloudglide/output_visual/cold_starts.png")
+
     
 def process_and_plot_caching(output_files):
     # Extract latencies and costs from the data
-    result = get_latency_data_from_files(output_files)
+    result = get_io_latency_data_from_files(output_files)
 
     latencies1 = [entry[0] for entry in result]
     costs1 = [entry[2] for entry in result]
@@ -423,8 +454,8 @@ def process_and_plot_caching(output_files):
     plt.grid(True, alpha=0.3)
 
     # Set the axis limits and ensure equal scaling
-    plt.xlim(left=0, right=24)
-    plt.ylim(bottom=0, top=16)
+    plt.xlim(left=0, right=7)
+    plt.ylim(bottom=0, top=10)
 
     # Set tick label sizes
     plt.xticks(fontsize=26)
@@ -438,8 +469,10 @@ def process_and_plot_caching(output_files):
     # Display the plot
     plt.show()
     
-def process_and_plot_workload_pattern_1(result):
+def process_and_plot_workload_pattern_1(output_files):
 
+    result = get_latency_data_from_files(output_files)
+    
     # Extract latencies and costs from the data
     latencies1 = [entry[0] for entry in result[0:4]]
     costs1 = [entry[2] for entry in result[0:4]]
@@ -459,74 +492,71 @@ def process_and_plot_workload_pattern_1(result):
     labels2 = ['N=2', 'N=3', 'N=4', 'N=8']
     labels3 = ['VPU=6', 'VPU=12', 'VPU=24']
     labels4 = ['QaaS']
-    # Combine the latency and cost values into single arrays
-    points1 = np.array(list(zip(latencies1, costs1)))
-    points2 = np.array(list(zip(latencies2, costs2)))
-    points3 = np.array(list(zip(latencies3, costs3)))
-    points4 = np.array(list(zip(latencies4, costs4)))
+    fig, ax = plt.subplots(figsize=(7,4))
 
-    # Sort the points by latency, and then by cost
-    points1 = points1[points1[:, 0].argsort()]
-    points2 = points2[points2[:, 0].argsort()]
-    points3 = points3[points3[:, 0].argsort()]
-    points4 = points4[points4[:, 0].argsort()]
+    # Plot dataset1 (red)
+    ax.plot(latencies1, costs1,
+            color='red', marker='o', markersize=12, linewidth=2,
+            markeredgecolor='black', alpha=0.9, linestyle='-')
+    ax.scatter(latencies1, costs1, color='red', s=0)  # s=0 used so we rely on plot() markers
+    # dataset2 (blue)
+    ax.plot(latencies2, costs2,
+            color='blue', marker='o', markersize=12, linewidth=2,
+            markeredgecolor='black', alpha=0.9, linestyle='-')
+    ax.scatter(latencies2, costs2, color='blue', s=0)
 
-    # Set figure size
-    plt.figure(figsize=(7,4))
+    # dataset3 (green)
+    ax.plot(latencies3, costs3,
+            color='green', marker='o', markersize=12, linewidth=2,
+            markeredgecolor='black', alpha=0.9, linestyle='-')
+    ax.scatter(latencies3, costs3, color='green', s=0)
 
-    # Plot the points for the first dataset
-    plt.scatter(latencies1, costs1, color='red', label='DWaaS')
-    plt.plot(points1[:, 0], points1[:, 1], color='red', marker='o', markersize=6, linestyle='-',linewidth=3.0)
+    # dataset4 (purple)
+    ax.plot(latencies4, costs4,
+            color='purple', marker='o', markersize=12, linewidth=2,
+            markeredgecolor='black', alpha=0.9, linestyle='-')
+    ax.scatter(latencies4, costs4, color='purple', s=0)
 
-    # Plot the points for the second dataset
-    plt.scatter(latencies2, costs2, color='blue', label='DWaaS Autoscaling')
-    plt.plot(points2[:, 0], points2[:, 1], color='blue', marker='o', markersize=6, linestyle='-',linewidth=3.0)
-
-    # Plot the points for the third dataset
-    plt.scatter(latencies3, costs3, color='green', label='Elastic Pool')
-    plt.plot(points3[:, 0], points3[:, 1], color='green', marker='o', markersize=6, linestyle='-',linewidth=3.0)
-
-    # Plot the points for the fourth dataset
-    plt.scatter(latencies4, costs4, color='purple', label='QaaS')
-    plt.plot(points4[:, 0], points4[:, 1], color='purple', marker='o', markersize=6, linestyle='-',linewidth=3.0)
-
-    # Add labels for each point with a white background and better alignment
-    for i, (latency, cost, label) in enumerate(zip(latencies1, costs1, labels1)):
-        plt.text(latency, cost, label, fontsize=22, ha='right', va='top', color='red', 
+    # Annotations
+    for (x, y, lab) in zip(latencies1, costs1, labels1):
+        ax.text(x, y, lab, fontsize=22, ha='left', va='top', color='red',
+                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
+    for (x, y, lab) in zip(latencies2, costs2, labels2):
+        ax.text(x, y, lab, fontsize=22, ha='right', va='top', color='blue',
+                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
+    for (x, y, lab) in zip(latencies3, costs3, labels3):
+        ax.text(x, y, lab, fontsize=22, ha='left', va='bottom', color='green',
+                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
+    for (x, y, lab) in zip(latencies4, costs4, labels4):
+        ax.text(x, y, lab, fontsize=22, ha='left', va='bottom', color='purple',
                 bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
 
-    for i, (latency, cost, label) in enumerate(zip(latencies2, costs2, labels2)):
-        plt.text(latency, cost, label, fontsize=22, ha='left', va='top', color='blue', 
-                bbox=dict(facecolor='white', alpha=0.3, edgecolor='none', pad=2.0))
+    # Axes
+    ax.set_xlabel('Avg. Query Latency (sec)', fontsize=22)
+    ax.set_ylabel('Cost ($)', fontsize=22)
+    ax.tick_params(axis='both', labelsize=22)
+    ax.grid(True, linestyle='--', alpha=0.6)
 
-    for i, (latency, cost, label) in enumerate(zip(latencies3, costs3, labels3)):
-        plt.text(latency, cost, label, fontsize=22, ha='left', va='bottom', color='green', 
-                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
 
-    for i, (latency, cost, label) in enumerate(zip(latencies4, costs4, labels4)):
-        plt.text(latency, cost, label, fontsize=22, ha='left', va='bottom', color='purple', 
-                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
+    # Optional: x/y limits
+    ax.set_xlim(0, 15)
+    ax.set_ylim(0, 40)
 
-    # Add labels and title
-    plt.xlabel('Avg. Query Latency (sec)', fontsize=25)
-    plt.ylabel('Cost ($)', fontsize=25)
-    plt.title('Pattern 1 Architecture Comparison', fontsize=25)
-    # plt.legend(fontsize=25)
-    plt.grid(True)
+    # Example legend usage (commented out)
+    # ax.legend(['DWaaS','DWaaS Autoscaling','Elastic Pool','QaaS'],
+    #           fontsize=24, loc='best')
 
-    # Set the axis limits to start from 0
-    # plt.xlim(left=0, right=15)
-    # plt.ylim(bottom=0, top=25)
-
-    # Set tick label sizes
-    plt.xticks(fontsize=25)
-    plt.yticks(fontsize=25)
-    
+    plt.tight_layout()
+    # plt.show()
     plt.savefig('cloudglide/output_visual/pattern1.png', dpi=300)
+    print(f"Plot saved as cloudglide/output_visual/pattern1.png")
 
-    plt.show()
       
-def process_and_plot_workload_pattern_2(result):
+def process_and_plot_workload_pattern_2(output_files):
+
+    result = get_latency_data_from_files(output_files)
 
     # Extract latencies and costs from the data
     latencies1 = [entry[0] for entry in result[0:4]]
@@ -548,74 +578,53 @@ def process_and_plot_workload_pattern_2(result):
     labels3 = ['VPU=6','VPU=16', 'VPU=24','VPU=32', 'VPU=48', 'VPU=64']
     labels4 = ['QaaS']
     
-    # Combine the latency and cost values into single arrays
-    points1 = np.array(list(zip(latencies1, costs1)))
-    points2 = np.array(list(zip(latencies2, costs2)))
-    points3 = np.array(list(zip(latencies3, costs3)))
-    points4 = np.array(list(zip(latencies4, costs4)))
+    fig, ax = plt.subplots(figsize=(7,4))
 
-    # Sort the points by latency, and then by cost
-    points1 = points1[points1[:, 0].argsort()]
-    points2 = points2[points2[:, 0].argsort()]
-    points3 = points3[points3[:, 0].argsort()]
-    points4 = points4[points4[:, 0].argsort()]
+    # Plot each data set with line+markers
+    ax.plot(latencies1, costs1, color='red',   marker='o', markersize=12, linewidth=2,
+            markeredgecolor='black', alpha=0.9, linestyle='-')
+    ax.plot(latencies2, costs2, color='blue',  marker='o', markersize=12, linewidth=2,
+            markeredgecolor='black', alpha=0.9, linestyle='-')
+    ax.plot(latencies3, costs3, color='green', marker='o', markersize=12, linewidth=2,
+            markeredgecolor='black', alpha=0.9, linestyle='-')
+    ax.plot(latencies4, costs4, color='purple',marker='o', markersize=12, linewidth=2,
+            markeredgecolor='black', alpha=0.9, linestyle='-')
 
-    # Set figure size
-    plt.figure(figsize=(7,4))
-
-    # Plot the points for the first dataset
-    plt.scatter(latencies1, costs1, color='red', label='DWaaS')
-    plt.plot(points1[:, 0], points1[:, 1], color='red', marker='o', markersize=6, linestyle='-',linewidth=3.0)
-
-    # Plot the points for the second dataset
-    plt.scatter(latencies2, costs2, color='blue', label='DWaaS Autoscaling')
-    plt.plot(points2[:, 0], points2[:, 1], color='blue', marker='o', markersize=6, linestyle='-',linewidth=3.0)
-
-    # Plot the points for the third dataset
-    plt.scatter(latencies3, costs3, color='green', label='Elastic Pool')
-    plt.plot(points3[:, 0], points3[:, 1], color='green', marker='o', markersize=6, linestyle='-',linewidth=3.0)
-
-    # Plot the points for the fourth dataset
-    plt.scatter(latencies4, costs4, color='purple', label='QaaS')
-    plt.plot(points4[:, 0], points4[:, 1], color='purple', marker='o', markersize=6, linestyle='-',linewidth=3.0)
-
-    # Add labels for each point with a white background and better alignment
-    for i, (latency, cost, label) in enumerate(zip(latencies1, costs1, labels1)):
-        plt.text(latency, cost, label, fontsize=22, ha='right', va='top', color='red', 
-                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
-
-    for i, (latency, cost, label) in enumerate(zip(latencies2, costs2, labels2)):
-        plt.text(latency, cost, label, fontsize=22, ha='left', va='top', color='blue', 
+    # Annotations
+    for (x,y,l) in zip(latencies1, costs1, labels1):
+        ax.text(x, y, l, fontsize=22, color='red',
+                bbox=dict(facecolor='white', alpha=0.3, edgecolor='none', pad=2.0))
+    for (x,y,l) in zip(latencies2, costs2, labels2):
+        ax.text(x, y, l, fontsize=22, ha='right', color='blue',
+                bbox=dict(facecolor='white', alpha=0.3, edgecolor='none', pad=2.0))
+    for (x,y,l) in zip(latencies3, costs3, labels3):
+        ax.text(x, y, l, fontsize=22, color='green',
+                bbox=dict(facecolor='white', alpha=0.3, edgecolor='none', pad=2.0))
+    for (x,y,l) in zip(latencies4, costs4, labels4):
+        ax.text(x, y, l, fontsize=22, ha='right', color='purple',
                 bbox=dict(facecolor='white', alpha=0.3, edgecolor='none', pad=2.0))
 
-    for i, (latency, cost, label) in enumerate(zip(latencies3, costs3, labels3)):
-        plt.text(latency, cost, label, fontsize=22, ha='left', va='bottom', color='green', 
-                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
+    # Axes
+    ax.set_xlabel('Avg. Query Latency (sec)', fontsize=28)
+    ax.set_ylabel('Cost ($)', fontsize=28)
+    ax.tick_params(axis='both', labelsize=24)
+    ax.grid(True, linestyle='--', alpha=0.6)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
 
-    for i, (latency, cost, label) in enumerate(zip(latencies4, costs4, labels4)):
-        plt.text(latency, cost, label, fontsize=22, ha='left', va='bottom', color='purple', 
-                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
+    # Example axis limits
+    ax.set_xlim(0,30)
+    ax.set_ylim(0,85)
 
-    # Add labels and title
-    plt.xlabel('Avg. Query Latency (sec)', fontsize=25)
-    plt.ylabel('Cost ($)', fontsize=25)
-    plt.title('Pattern 2 Architecture Comparison', fontsize=25)
-    # plt.legend(fontsize=25)
-    plt.grid(True)
-
-    # Set the axis limits to start from 0
-    # plt.xlim(left=0, right=15)
-    # plt.ylim(bottom=0, top=25)
-
-    # Set tick label sizes
-    plt.xticks(fontsize=25)
-    plt.yticks(fontsize=25)
-    
+    plt.tight_layout()
+    # plt.show()
     plt.savefig('cloudglide/output_visual/pattern2.png', dpi=300)
+    print(f"Plot saved as cloudglide/output_visual/pattern2.png")
 
-    plt.show()
     
-def process_and_plot_workload_pattern_3(result):
+def process_and_plot_workload_pattern_3(output_files):
+
+    result = get_latency_data_from_files(output_files)
 
     # Extract latencies and costs from the data
     latencies1 = [entry[0] for entry in result[0:4]]
@@ -637,70 +646,51 @@ def process_and_plot_workload_pattern_3(result):
     labels3 = ['VPU=6','VPU=16', 'VPU=24','VPU=32', 'VPU=48', 'VPU=64']
     labels4 = ['QaaS']
     
-    # Combine the latency and cost values into single arrays
-    points1 = np.array(list(zip(latencies1, costs1)))
-    points2 = np.array(list(zip(latencies2, costs2)))
-    points3 = np.array(list(zip(latencies3, costs3)))
-    points4 = np.array(list(zip(latencies4, costs4)))
+    fig, ax = plt.subplots(figsize=(7,4))
 
-    # Sort the points by latency, and then by cost
-    points1 = points1[points1[:, 0].argsort()]
-    points2 = points2[points2[:, 0].argsort()]
-    points3 = points3[points3[:, 0].argsort()]
-    points4 = points4[points4[:, 0].argsort()]
+    ax.plot(latencies1, costs1, color='red',   marker='o', markersize=12, linewidth=2,
+            markeredgecolor='black', alpha=0.9, linestyle='-')
+    ax.plot(latencies2, costs2, color='blue',  marker='o', markersize=12, linewidth=2,
+            markeredgecolor='black', alpha=0.9, linestyle='-')
+    ax.plot(latencies3, costs3, color='green', marker='o', markersize=12, linewidth=2,
+            markeredgecolor='black', alpha=0.9, linestyle='-')
+    ax.plot(latencies4, costs4, color='purple',marker='o', markersize=12, linewidth=2,
+            markeredgecolor='black', alpha=0.9, linestyle='-')
 
-    # Set figure size
-    plt.figure(figsize=(7,4))
-
-    # Plot the points for the first dataset
-    plt.scatter(latencies1, costs1, color='red', label='DWaaS')
-    plt.plot(points1[:, 0], points1[:, 1], color='red', marker='o', markersize=6, linestyle='-',linewidth=3.0)
-
-    # Plot the points for the second dataset
-    plt.scatter(latencies2, costs2, color='blue', label='DWaaS Autoscaling')
-    plt.plot(points2[:, 0], points2[:, 1], color='blue', marker='o', markersize=6, linestyle='-',linewidth=3.0)
-
-    # Plot the points for the third dataset
-    plt.scatter(latencies3, costs3, color='green', label='Elastic Pool')
-    plt.plot(points3[:, 0], points3[:, 1], color='green', marker='o', markersize=6, linestyle='-',linewidth=3.0)
-
-    # Plot the points for the fourth dataset
-    plt.scatter(latencies4, costs4, color='purple', label='QaaS')
-    plt.plot(points4[:, 0], points4[:, 1], color='purple', marker='o', markersize=6, linestyle='-',linewidth=3.0)
-
-    # Add labels for each point with a white background and better alignment
-    for i, (latency, cost, label) in enumerate(zip(latencies1, costs1, labels1)):
-        plt.text(latency, cost, label, fontsize=22, ha='right', va='top', color='red', 
-                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
-
-    for i, (latency, cost, label) in enumerate(zip(latencies2, costs2, labels2)):
-        plt.text(latency, cost, label, fontsize=22, ha='left', va='top', color='blue', 
+    # Annotations
+    for (x,y,lbl) in zip(latencies1, costs1, labels1):
+        ax.text(x, y, lbl, fontsize=22, color='red',
+                bbox=dict(facecolor='white', alpha=0.3, edgecolor='none', pad=2.0))
+    for (x,y,lbl) in zip(latencies2, costs2, labels2):
+        ax.text(x, y, lbl, fontsize=22, color='blue',
+                bbox=dict(facecolor='white', alpha=0.3, edgecolor='none', pad=2.0))
+    for (x,y,lbl) in zip(latencies3, costs3, labels3):
+        ax.text(x, y, lbl, fontsize=22, ha='center', color='green',
+                bbox=dict(facecolor='white', alpha=0.3, edgecolor='none', pad=2.0))
+    for (x,y,lbl) in zip(latencies4, costs4, labels4):
+        ax.text(x, y, lbl, fontsize=22, color='purple',
                 bbox=dict(facecolor='white', alpha=0.3, edgecolor='none', pad=2.0))
 
-    for i, (latency, cost, label) in enumerate(zip(latencies3, costs3, labels3)):
-        plt.text(latency, cost, label, fontsize=22, ha='left', va='bottom', color='green', 
-                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
+    ax.set_xlabel('Avg. Query Latency (sec)', fontsize=22)
+    ax.set_ylabel('Cost ($)', fontsize=22)
+    ax.tick_params(axis='both', labelsize=22)
+    ax.grid(True, linestyle='--', alpha=0.6)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
 
-    for i, (latency, cost, label) in enumerate(zip(latencies4, costs4, labels4)):
-        plt.text(latency, cost, label, fontsize=22, ha='left', va='bottom', color='purple', 
-                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
+    # Set the axis limits to start from 0
+    plt.xlim(left=0, right=30)
+    plt.ylim(bottom=0, top=85)
 
-    # Add labels and title
-    plt.xlabel('Avg. Query Latency (sec)', fontsize=25)
-    plt.ylabel('Cost ($)', fontsize=25)
-    plt.title('Pattern 3 Architecture Comparison', fontsize=25)
-    # plt.legend(fontsize=25)
-    plt.grid(True)
-
-    # Set tick label sizes
-    plt.xticks(fontsize=25)
-    plt.yticks(fontsize=25)
-    
+    plt.tight_layout()
+    # plt.show()
     plt.savefig('cloudglide/output_visual/pattern3.png', dpi=300)
+    print(f"Plot saved as cloudglide/output_visual/pattern3.png")
 
-    plt.show()
     
-def process_and_plot_workload_pattern_4(result):
+def process_and_plot_workload_pattern_4(output_files):
+
+    result = get_latency_data_from_files(output_files)
 
     # Extract latencies and costs from the data
     latencies1 = [entry[0] for entry in result[0:4]]
@@ -722,68 +712,60 @@ def process_and_plot_workload_pattern_4(result):
     labels3 = ['VPU=6', 'VPU=12', 'VPU=24']
     labels4 = ['QaaS']
     
-    # Combine the latency and cost values into single arrays
-    points1 = np.array(list(zip(latencies1, costs1)))
-    points2 = np.array(list(zip(latencies2, costs2)))
-    points3 = np.array(list(zip(latencies3, costs3)))
-    points4 = np.array(list(zip(latencies4, costs4)))
+    fig, ax = plt.subplots(figsize=(7,4))
 
-    # Sort the points by latency, and then by cost
-    points1 = points1[points1[:, 0].argsort()]
-    points2 = points2[points2[:, 0].argsort()]
-    points3 = points3[points3[:, 0].argsort()]
-    points4 = points4[points4[:, 0].argsort()]
+    ax.plot(latencies1, costs1,
+            color='red', marker='o', markersize=12, linewidth=2,
+            markeredgecolor='black', alpha=0.9, linestyle='-')
+    ax.scatter(latencies1, costs1, color='red', s=0)
 
-    # Set figure size
-    plt.figure(figsize=(7,4))
+    ax.plot(latencies2, costs2,
+            color='blue', marker='o', markersize=12, linewidth=2,
+            markeredgecolor='black', alpha=0.9, linestyle='-')
+    ax.scatter(latencies2, costs2, color='blue', s=0)
 
-    # Plot the points for the first dataset
-    plt.scatter(latencies1, costs1, color='red', label='DWaaS')
-    plt.plot(points1[:, 0], points1[:, 1], color='red', marker='o', markersize=6, linestyle='-',linewidth=3.0)
+    ax.plot(latencies3, costs3,
+            color='green', marker='o', markersize=12, linewidth=2,
+            markeredgecolor='black', alpha=0.9, linestyle='-')
+    ax.scatter(latencies3, costs3, color='green', s=0)
 
-    # Plot the points for the second dataset
-    plt.scatter(latencies2, costs2, color='blue', label='DWaaS Autoscaling')
-    plt.plot(points2[:, 0], points2[:, 1], color='blue', marker='o', markersize=6, linestyle='-',linewidth=3.0)
+    ax.plot(latencies4, costs4,
+            color='purple', marker='o', markersize=12, linewidth=2,
+            markeredgecolor='black', alpha=0.9, linestyle='-')
+    ax.scatter(latencies4, costs4, color='purple', s=0)
 
-    # Plot the points for the third dataset
-    plt.scatter(latencies3, costs3, color='green', label='Elastic Pool')
-    plt.plot(points3[:, 0], points3[:, 1], color='green', marker='o', markersize=6, linestyle='-',linewidth=3.0)
-
-    # Plot the points for the fourth dataset
-    plt.scatter(latencies4, costs4, color='purple', label='QaaS')
-    plt.plot(points4[:, 0], points4[:, 1], color='purple', marker='o', markersize=6, linestyle='-',linewidth=3.0)
-
-    # Add labels for each point with a white background and better alignment
-    for i, (latency, cost, label) in enumerate(zip(latencies1, costs1, labels1)):
-        plt.text(latency, cost, label, fontsize=22, ha='right', va='top', color='red', 
-                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
-
-    for i, (latency, cost, label) in enumerate(zip(latencies2, costs2, labels2)):
-        plt.text(latency, cost, label, fontsize=22, ha='left', va='top', color='blue', 
+    for (x,y,lab) in zip(latencies1, costs1, labels1):
+        ax.text(x, y, lab, fontsize=22, color='red',
                 bbox=dict(facecolor='white', alpha=0.3, edgecolor='none', pad=2.0))
-
-    for i, (latency, cost, label) in enumerate(zip(latencies3, costs3, labels3)):
-        plt.text(latency, cost, label, fontsize=22, ha='left', va='bottom', color='green', 
+    for (x,y,lab) in zip(latencies2, costs2, labels2):
+        ax.text(x, y, lab, fontsize=22, ha='right', va='top', color='blue',
+                bbox=dict(facecolor='white', alpha=0.3, edgecolor='none', pad=2.0))
+    for (x,y,lab) in zip(latencies3, costs3, labels3):
+        ax.text(x, y, lab, fontsize=22, va='bottom', color='green',
+                bbox=dict(facecolor='white', alpha=0.3, edgecolor='none', pad=2.0))
+    for (x,y,lab) in zip(latencies4, costs4, labels4):
+        ax.text(x, y, lab, fontsize=22, ha='right', va='bottom', color='purple',
                 bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
 
-    for i, (latency, cost, label) in enumerate(zip(latencies4, costs4, labels4)):
-        plt.text(latency, cost, label, fontsize=22, ha='left', va='bottom', color='purple', 
-                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
+    ax.set_xlabel('Avg. Query Latency (sec)', fontsize=22)
+    ax.set_ylabel('Cost ($)', fontsize=22)
+    ax.tick_params(axis='both', labelsize=22)
+    ax.grid(True, linestyle='--', alpha=0.6)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
 
-    # Add labels and title
-    plt.xlabel('Avg. Query Latency (sec)', fontsize=25)
-    plt.ylabel('Cost ($)', fontsize=25)
-    plt.title('Pattern 4 Architecture Comparison', fontsize=25)
-    # plt.legend(fontsize=25)
-    plt.grid(True)
+    ax.set_xlim(0,15)
+    ax.set_ylim(0,27)
 
-    # Set tick label sizes
-    plt.xticks(fontsize=25)
-    plt.yticks(fontsize=25)
+    plt.tight_layout()
+    # plt.show()
     plt.savefig('cloudglide/output_visual/pattern4.png', dpi=300)
-    plt.show()
+    print(f"Plot saved as cloudglide/output_visual/pattern4.png")
+
     
-def process_and_plot_workload_pattern_5(result):
+def process_and_plot_workload_pattern_5(output_files):
+    
+    result = get_latency_data_from_files(output_files)
 
     # Extract latencies and costs from the data
     latencies1 = [entry[0] for entry in result[0:4]]
@@ -804,64 +786,432 @@ def process_and_plot_workload_pattern_5(result):
     labels2 = ['N=2', '', 'N=4', 'N=8']
     labels3 = ['VPU=4', 'VPU=6', 'VPU=12', 'VPU=24']
     labels4 = ['QaaS']
-    
-    # Combine the latency and cost values into single arrays
-    points1 = np.array(list(zip(latencies1, costs1)))
-    points2 = np.array(list(zip(latencies2, costs2)))
-    points3 = np.array(list(zip(latencies3, costs3)))
-    points4 = np.array(list(zip(latencies4, costs4)))
 
-    # Sort the points by latency, and then by cost
-    points1 = points1[points1[:, 0].argsort()]
-    points2 = points2[points2[:, 0].argsort()]
-    points3 = points3[points3[:, 0].argsort()]
-    points4 = points4[points4[:, 0].argsort()]
 
-    # Set figure size
-    plt.figure(figsize=(7,4))
+    # Sort by latency so the line is drawn left -> right
+    # (If there's only one point, you'll just see a single marker.)
+    def sort_data(xs, ys, lbs):
+        pts = sorted(zip(xs, ys, lbs), key=lambda x: x[0])
+        return zip(*pts)  # returns (sorted_x, sorted_y, sorted_labels)
 
-    # Plot the points for the first dataset
-    plt.scatter(latencies1, costs1, color='red', label='DWaaS')
-    plt.plot(points1[:, 0], points1[:, 1], color='red', marker='o', markersize=6, linestyle='-',linewidth=3.0)
+    latencies1, costs1, labels1 = sort_data(latencies1, costs1, labels1)
+    latencies1 = list(latencies1)
+    costs1     = list(costs1)
+    labels1    = list(labels1)
 
-    # Plot the points for the second dataset
-    plt.scatter(latencies2, costs2, color='blue', label='DWaaS Autoscaling')
-    plt.plot(points2[:, 0], points2[:, 1], color='blue', marker='o', markersize=6, linestyle='-',linewidth=3.0)
+    latencies2, costs2, labels2 = sort_data(latencies2, costs2, labels2)
+    latencies2 = list(latencies2)
+    costs2     = list(costs2)
+    labels2    = list(labels2)
 
-    # Plot the points for the third dataset
-    plt.scatter(latencies3, costs3, color='green', label='Elastic Pool')
-    plt.plot(points3[:, 0], points3[:, 1], color='green', marker='o', markersize=6, linestyle='-',linewidth=3.0)
+    latencies3, costs3, labels3 = sort_data(latencies3, costs3, labels3)
+    latencies3 = list(latencies3)
+    costs3     = list(costs3)
+    labels3    = list(labels3)
 
-    # Plot the points for the fourth dataset
-    plt.scatter(latencies4, costs4, color='purple', label='QaaS')
-    plt.plot(points4[:, 0], points4[:, 1], color='purple', marker='o', markersize=6, linestyle='-',linewidth=3.0)
+    latencies4, costs4, labels4 = sort_data(latencies4, costs4, labels4)
+    latencies4 = list(latencies4)
+    costs4     = list(costs4)
+    labels4    = list(labels4)
 
-    # Add labels for each point with a white background and better alignment
-    for i, (latency, cost, label) in enumerate(zip(latencies1, costs1, labels1)):
-        plt.text(latency, cost, label, fontsize=22, ha='right', va='top', color='red', 
-                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
+    fig, ax = plt.subplots(figsize=(7, 4))
 
-    for i, (latency, cost, label) in enumerate(zip(latencies2, costs2, labels2)):
-        plt.text(latency, cost, label, fontsize=22, ha='left', va='top', color='blue', 
+    # Plot dataset1 (red)
+    ax.plot(latencies1, costs1, color='red', marker='o', markersize=12,
+            linewidth=2, markeredgecolor='black', alpha=0.9, linestyle='-')
+    # dataset2 (blue)
+    ax.plot(latencies2, costs2, color='blue', marker='o', markersize=12,
+            linewidth=2, markeredgecolor='black', alpha=0.9, linestyle='-')
+    # dataset3 (green)
+    ax.plot(latencies3, costs3, color='green', marker='o', markersize=12,
+            linewidth=2, markeredgecolor='black', alpha=0.9, linestyle='-')
+    # dataset4 (purple)
+    ax.plot(latencies4, costs4, color='purple', marker='o', markersize=12,
+            linewidth=2, markeredgecolor='black', alpha=0.9, linestyle='-')
+
+    # Annotations
+    for (x, y, lab) in zip(latencies1, costs1, labels1):
+        ax.text(x, y, lab, fontsize=22, va='bottom', color='red',
+                bbox=dict(facecolor='white', alpha=0.3, edgecolor='none', pad=2.0))
+    for (x, y, lab) in zip(latencies2, costs2, labels2):
+        ax.text(x, y, lab, fontsize=22, va='top', ha='right', color='blue',
+                bbox=dict(facecolor='white', alpha=0.3, edgecolor='none', pad=2.0))
+    for (x, y, lab) in zip(latencies3, costs3, labels3):
+        ax.text(x, y, lab, fontsize=22, va='bottom', color='green',
+                bbox=dict(facecolor='white', alpha=0.3, edgecolor='none', pad=2.0))
+    for (x, y, lab) in zip(latencies4, costs4, labels4):
+        ax.text(x, y, lab, fontsize=22, va='bottom', color='purple',
                 bbox=dict(facecolor='white', alpha=0.3, edgecolor='none', pad=2.0))
 
-    for i, (latency, cost, label) in enumerate(zip(latencies3, costs3, labels3)):
-        plt.text(latency, cost, label, fontsize=22, ha='left', va='bottom', color='green', 
-                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
+    # Axis labels, ticks, grid
+    ax.set_xlabel('Avg. Query Latency (sec)', fontsize=22)
+    ax.set_ylabel('Cost ($)', fontsize=22)
+    ax.tick_params(axis='both', labelsize=22)
+    ax.grid(True, linestyle='--', alpha=0.6)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
 
-    for i, (latency, cost, label) in enumerate(zip(latencies4, costs4, labels4)):
-        plt.text(latency, cost, label, fontsize=22, ha='left', va='bottom', color='purple', 
-                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=2.0))
+    # If you have multiple data sets, you can add a legend:
+    # ax.legend(['DWaaS','DWaaS A/S','Elastic Pool','QaaS'], fontsize=20, loc='best')
 
-    # Add labels and title
-    plt.xlabel('Avg. Query Latency (sec)', fontsize=25)
-    plt.ylabel('Cost ($)', fontsize=25)
-    plt.title('Pattern 5 Architecture Comparison', fontsize=25)
-    # plt.legend(fontsize=25)
-    plt.grid(True)
+    ax.set_xlim(0,25)
+    ax.set_ylim(0,57)
 
-    # Set tick label sizes
-    plt.xticks(fontsize=25)
-    plt.yticks(fontsize=25)
+    plt.tight_layout()
+    # plt.show()
     plt.savefig('cloudglide/output_visual/pattern5.png', dpi=300)
-    plt.show()
+    print(f"Plot saved as cloudglide/output_visual/pattern5.png")
+
+def tpch_results():
+    # Create the output directory if it doesn't exist
+    os.makedirs("cloudglide/output_visual/tpch", exist_ok=True)
+
+    # ----
+    # Settings
+    # ----
+    target_scales = [1, 10, 23, 59, 85, 125, 202, 356]
+    plot_scales = [23, 59, 85, 125, 202]
+
+    exp_file = "cloudglide/datasets/aws_output.csv"
+
+    sim_files = {
+        "N=1": "cloudglide/output_simulation/tpch_1.csv",
+        "N=2": "cloudglide/output_simulation/tpch_2.csv",
+        "N=4": "cloudglide/output_simulation/tpch_3.csv",
+        "N=8": "cloudglide/output_simulation/tpch_4.csv"
+    }
+
+    config_colors = {
+        "N=1": "red",
+        "N=2": "blue",
+        "N=4": "green",
+        "N=8": "purple"
+    }
+
+    # ----
+    # 1. Load and reshape experimental data
+    # ----
+    df_exp = pd.read_csv(exp_file)
+
+    required_cols = ["Query", "Data Size", "N=1 Redshift", "N=2 Redshift", "N=4 Redshift", "N=8 Redshift"]
+    for col in required_cols:
+        if col not in df_exp.columns:
+            raise ValueError(f"Column {col} not found in {exp_file}.")
+
+    df_exp.rename(columns={"Query": "query_id", "Data Size": "scale_factor"}, inplace=True)
+    df_exp["query_id"] = pd.to_numeric(df_exp["query_id"], errors="coerce")
+    df_exp["scale_factor"] = pd.to_numeric(df_exp["scale_factor"], errors="coerce")
+
+    dwaas_cols = ["N=1 Redshift", "N=2 Redshift", "N=4 Redshift", "N=8 Redshift"]
+    df_exp_long = df_exp.melt(
+        id_vars=["query_id", "scale_factor"],
+        value_vars=dwaas_cols,
+        var_name="config",
+        value_name="exp_duration"
+    )
+    df_exp_long["config"] = df_exp_long["config"].str.replace(" Redshift", "")
+
+    # ----
+    # 2. Load simulation data
+    # ----
+    sim_data = {}
+    for config, fname in sim_files.items():
+        df_sim = pd.read_csv(fname)
+        for col in ["query_id", "query_duration"]:
+            if col not in df_sim.columns:
+                raise ValueError(f"Column {col} not found in {fname}.")
+        df_sim["query_id"] = pd.to_numeric(df_sim["query_id"], errors="coerce")
+        
+        # If scale_factor not in the CSV, assign it via group
+        if "scale_factor" not in df_sim.columns:
+            def assign_scale(group):
+                group = group.copy()
+                n = len(target_scales)
+                if len(group) != n:
+                    raise ValueError(
+                        f"Query {group['query_id'].iloc[0]} does not have {n} rows in {fname}."
+                    )
+                group["scale_factor"] = target_scales
+                return group
+            df_sim = df_sim.groupby("query_id", group_keys=False).apply(assign_scale)
+
+        df_sim["scale_factor"] = pd.to_numeric(df_sim["scale_factor"], errors="coerce")
+        df_sim["config"] = config
+        sim_data[config] = df_sim
+
+    df_sim_all = pd.concat(sim_data.values(), ignore_index=True)
+
+    # ----
+    # 3. Per-query analysis + stats
+    # ----
+    queries = sorted(df_exp_long["query_id"].unique())
+
+    stats_results = []
+    mre_list = []
+    fine_results = []  # row-by-row stats: MRE, QERROR, SRE
+
+    for q in queries:
+        plt.figure(figsize=(8,6))
+        
+        for config in config_colors.keys():
+            sub_exp = df_exp_long[
+                (df_exp_long["query_id"] == q)
+                & (df_exp_long["config"] == config)
+                & (df_exp_long["scale_factor"].isin(plot_scales))
+            ].sort_values(by="scale_factor")
+            
+            sub_sim = df_sim_all[
+                (df_sim_all["query_id"] == q)
+                & (df_sim_all["config"] == config)
+                & (df_sim_all["scale_factor"].isin(plot_scales))
+            ].sort_values(by="scale_factor")
+            
+            plt.plot(
+                sub_exp["scale_factor"], sub_exp["exp_duration"],
+                marker="o", linestyle="-", color=config_colors[config],
+                label=f"{config} Exp" if q == queries[0] else None
+            )
+            plt.plot(
+                sub_sim["scale_factor"], sub_sim["query_duration"],
+                marker="s", linestyle="--", color=config_colors[config],
+                label=f"{config} Sim" if q == queries[0] else None
+            )
+            
+            if not sub_exp.empty and not sub_sim.empty:
+                exp_vals = sub_exp["exp_duration"].values
+                sim_vals = sub_sim["query_duration"].values
+                sc_vals = sub_exp["scale_factor"].values
+                
+                errors = sim_vals - exp_vals
+                mae = np.mean(np.abs(errors))
+                rmse = np.sqrt(np.mean(errors**2))
+                rel_errors = np.abs(errors) / exp_vals
+                mre = np.mean(rel_errors)
+                
+                stats_results.append({
+                    "query_id": q,
+                    "config": config,
+                    "num_points": len(exp_vals),
+                    "MAE": mae,
+                    "RMSE": rmse,
+                    "MRE": mre
+                })
+                mre_list.append({"query_id": q, "config": config, "MRE": mre})
+                
+                # finer row-by-row
+                for i in range(len(sc_vals)):
+                    e = exp_vals[i]
+                    s = sim_vals[i]
+                    sc = sc_vals[i]
+                    
+                    err = s - e
+                    mae_ = abs(err)
+                    rmse_ = abs(err)  # single point
+                    mre_ = mae_ / e if e != 0 else np.inf
+                    if e > 0 and s > 0:
+                        qerr_ = max(s/e, e/s)
+                    else:
+                        qerr_ = np.inf
+                    sre_ = (err/e) if e !=0 else np.inf
+                    
+                    fine_results.append({
+                        "query_id": q,
+                        "config": config,
+                        "scale_factor": sc,
+                        "MAE": mae_,
+                        "RMSE": rmse_,
+                        "MRE": mre_,
+                        "QERROR": qerr_,
+                        "SRE": sre_
+                    })
+
+        plt.xlabel("Scale Factor")
+        plt.ylabel("Query Duration (s)")
+        plt.title(f"Query {int(q)} Performance vs Scale Factor")
+        plt.legend(loc="best", fontsize=9)
+        plt.grid(True)
+        plt.tight_layout()
+
+        # Save figure (no plt.show())
+        save_path = f"cloudglide/output_visual/tpch/query_{int(q)}_performance.png"
+        plt.savefig(save_path, dpi=300)
+        plt.close()
+
+    # Aggregated stats
+    df_stats = pd.DataFrame(stats_results)
+    pd.set_option('display.max_rows', None)
+    print(df_stats)
+
+    # We also save the summary CSV in the same directory
+    df_stats.to_csv("cloudglide/output_visual/tpch/statistics_summary.csv", index=False)
+
+    # ---- 4. MRE violin
+    df_mre = pd.DataFrame(mre_list)
+
+    sns.set(style="whitegrid", context="paper", font_scale=1.2)
+    plt.figure(figsize=(8,6))
+    sns.violinplot(x="config", y="MRE", data=df_mre, palette=config_colors, inner="quartile")
+    plt.xlabel("DWaaS Configuration")
+    plt.ylabel("Mean Relative Error (Abs)")
+    plt.title("Distribution of Mean Relative Error across Queries per Config")
+    plt.tight_layout()
+
+    # Save the violinplot
+    plt.savefig("cloudglide/output_visual/tpch/mean_relative_error_violinplot.png", dpi=300)
+    plt.close()
+
+    # ---- 5. Boxplot-based MRE outliers
+    print("\nMRE Outliers by config (MRE > Q3+1.5*IQR):")
+    for config, group in df_mre.groupby("config"):
+        Q1 = group["MRE"].quantile(0.25)
+        Q3 = group["MRE"].quantile(0.75)
+        IQR = Q3 - Q1
+        threshold = Q3 + 1.5*IQR
+        worst = group[group["MRE"]>threshold]
+        if not worst.empty:
+            print(f"\nConfiguration {config} MRE > {threshold:.3f} =>")
+            print(worst.to_string(index=False))
+        else:
+            print(f"\nConfiguration {config}: No MRE outliers found.")
+
+    # (New) Print top 10 MRE overall:
+    df_mre_sorted = df_mre.sort_values(by="MRE", ascending=False)
+    print("\nTop 10 MRE outliers overall:")
+    print(df_mre_sorted.head(10).to_string(index=False))
+
+    # ---- 6. Write finer granularity with SRE
+    df_fine = pd.DataFrame(fine_results)
+    df_fine = df_fine[[
+        "query_id", "config", "scale_factor",
+        "MAE", "RMSE", "MRE", "QERROR", "SRE"
+    ]]
+    df_fine_path = "cloudglide/output_visual/tpch/finer_statistics.csv"
+    df_fine.to_csv(df_fine_path, index=False)
+    print(f"\nWrote finer granularity rows to '{df_fine_path}'.")
+
+    # Set style/context for the next plot
+    sns.set_style("ticks")
+    sns.set_context("paper", font_scale=1.4)
+
+    plt.figure(figsize=(6,4))
+    ax = sns.violinplot(
+        x="config",
+        y="SRE",
+        data=df_fine,
+        palette=config_colors,
+        inner="quartile",
+        cut=0,       # prevents extreme tails
+        linewidth=1
+    )
+    ax.axhline(0, color='k', linestyle='--', linewidth=1.0)
+    ax.set_xlabel("DWaaS Configuration", fontsize=22)
+    ax.set_ylabel("Signed Relative Error", fontsize=22)
+    ax.tick_params(axis='both', labelsize=22)
+    ax.set_ylim([-1, 1])
+    sns.despine(trim=True)
+    plt.tight_layout()
+
+    # Save the SRE violinplot as PDF
+    pdf_path = "cloudglide/output_visual/tpch/signed_relative_error_violinplot.pdf"
+    plt.savefig(pdf_path, bbox_inches='tight')
+    plt.close()
+
+    # ---- 9. QERROR outliers
+    print("\nQERROR Outliers by config (QERROR > Q3+1.5*IQR):")
+    for config, group in df_fine.groupby("config"):
+        Q1 = group["QERROR"].quantile(0.25)
+        Q3 = group["QERROR"].quantile(0.75)
+        IQR = Q3 - Q1
+        threshold = Q3 + 1.5 * IQR
+        worst = group[group["QERROR"] > threshold]
+        if not worst.empty:
+            print(f"\nConfiguration {config}, QERROR > {threshold:.3f} =>")
+            print(worst.to_string(index=False))
+        else:
+            print(f"\nConfiguration {config}: No QERROR outliers found.")
+
+    # ---- (New) Signed Relative Error outliers
+    print("\nSRE Outliers by config using boxplot approach (over & under):")
+    df_sre = df_fine[["query_id","config","SRE"]]
+
+    for config, group in df_sre.groupby("config"):
+        Q1 = group["SRE"].quantile(0.25)
+        Q3 = group["SRE"].quantile(0.75)
+        IQR = Q3 - Q1
+        upper = Q3 + 1*IQR
+        lower = Q1 - 1*IQR
+
+        worst_over = group[group["SRE"] > upper]
+        worst_under = group[group["SRE"] < lower]
+
+        print(f"\nConfiguration {config}:")
+        if worst_over.empty and worst_under.empty:
+            print("  No SRE outliers found.")
+        else:
+            if not worst_over.empty:
+                print("  Overest Outliers (SRE > {:.3f}):".format(upper))
+                print(worst_over.to_string(index=False))
+            if not worst_under.empty:
+                print("  Underest Outliers (SRE < {:.3f}):".format(lower))
+                print(worst_under.to_string(index=False))
+
+    print("Done.")
+    
+    
+def plot_concurrency(output_file):
+    """
+    Plots concurrency vs. execution time using hard-coded 'measured' data,
+    and 'ideal_linear' read from the CSV at specific row indices.
+    """
+    # Set up Seaborn for a polished look with larger fonts
+    sns.set_theme(style='whitegrid', context='paper', font_scale=3)
+    
+    # Concurrency from 1 to 10
+    concurrency_levels = np.arange(1, 9)
+    
+    # Rows in your CSV to extract
+    row_indices = [0, 2, 3, 5, 8, 14, 19, 24]
+    
+    # Read the CSV file
+    df = pd.read_csv(output_file)
+    
+    # Extract the 'query_duration_with_queue' column from these row indices
+    ideal_linear = df.loc[row_indices, 'query_duration_with_queue'].values
+    
+    # Measured times for Q1 SF=10 (kept as a hard-coded example)
+    measured = np.array([3.1, 5.6, 8.4, 11.2, 13.5, 17.1, 19.2, 23])
+    
+    # Create figure with dimensions 8x4 inches
+    fig, ax = plt.subplots(figsize=(8, 4))
+
+    # Plot "ideal_linear" (from CSV)
+    ax.plot(concurrency_levels, ideal_linear, 
+            marker='o', markersize=12, linestyle='--', linewidth=3.0, 
+            color='magenta', label='CloudGlide')
+
+    # Plot Measured (remains hard-coded)
+    ax.plot(concurrency_levels, measured, 
+            marker='s', markersize=10, linestyle='-', linewidth=3.0, 
+            color='black', label='Measured')
+
+    # Configure axes
+    ax.set_xticks(concurrency_levels)
+    ax.set_xlabel('Concurrent Queries (N)', fontsize=28)
+    ax.set_ylabel('Per-Query \nEx. Time (sec)', fontsize=28)
+
+    # Increase tick label font sizes
+    ax.tick_params(axis='both', which='major', labelsize=28)
+
+    # Style grid and spines
+    ax.grid(True, linestyle='--', linewidth=1.0)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    for spine in ax.spines.values():
+        spine.set_linewidth(1.5)
+
+    # Add legend with bigger fonts
+    ax.legend(loc='upper left', fontsize=23, frameon=False)
+
+    plt.tight_layout()
+    plt.savefig('cloudglide/output_visual/concurrency.png', dpi=300)
+    print("Plot saved as cloudglide/output_visual/concurrency.png")

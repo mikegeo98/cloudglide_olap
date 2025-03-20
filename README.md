@@ -175,6 +175,24 @@ After a run, CloudGlide writes simulation results in CSV format under the specif
 - **Custom scaling policies**: Insert logic in `scaling_model.py` (see `Autoscaler` class).
 - **Custom cost models**: Modify `cost_model.py` or reference your own cost function in `execution_model.py`.
 
+## 8. Motivated Use Cases
+
+**`use_cases.py`** is a helper script that demonstrates how to run predefined simulation scenarios and analyze their results. Each scenario corresponds to a typical research or operational question about scheduling, scaling, caching, or cost modeling in data-processing systems. After running the simulation, **`use_cases.py`** automatically processes the output CSV files and generates relevant plots or statistics. This allows you to quickly reproduce experiments and gather insights without manually invoking `main.py` multiple times.
+
+Below is a quick overview of each supported use case:
+
+- **`scheduling()`**: Compares different scheduling strategies (e.g., FCFS vs. priority-based) under various node configurations.  
+- **`scaling_options()`**: Evaluates fixed vs. autoscaling node configurations, highlighting how different strategies handle changing workloads.  
+- **`caching()`**: Assesses the effect of caching or partial reuse on overall query runtime and resource utilization.  
+- **`scaling_algorithms()`**: Investigates multiple autoscaling policies (e.g., reactive or queue-based) for performance and cost trade-offs.  
+- **`spot()`**: Explores the use of spot instances, analyzing potential savings versus performance variability.  
+- **`workload_patterns()`**: Simulates different workload distributions (e.g., bursty vs. steady) across multiple architectures (DWaaS, EP, QaaS).  
+- **`cold_starts()`**: Examines how cold starts in on-demand or serverless environments affect query latencies.  
+- **`tpch()`**: Demonstrates a TPC-H run for various scale factors and cluster sizes, commonly used for benchmarking relational query processing. Results plotted and compared against experimental data.
+- **`concurrency()`**: Demonstrates how isolated or concurrent execution affects query latency on fixed hardware.
+
+By running `python use_cases.py <example_name>`, you can reproduce these scenarios, generate CSV outputs under `cloudglide/output_simulation/`, and view any generated plots or metrics.
+
 ---
 
 ### Questions or Support

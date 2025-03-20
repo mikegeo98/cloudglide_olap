@@ -30,19 +30,19 @@
         "dataset_values": [21]
     },
     "queueing_effect": {
-        "architecture_values": [1],
+        "architecture_values": [0],
         "scheduling_values": [0,1,2,4],
         "nodes_values": [2],
         "vpu_values": [1],
         "scaling_values": [1],
         "cold_starts_values": [180],
         "hit_rate_values": [1],
-        "instance_values": [0],
+        "instance_values": [6],
         "arrival_rate_values": [0.1],
         "network_bandwidth_values": [10],
         "io_bandwidth_values": [650],
         "memory_bandwidth_values": [40000],
-        "dataset_values": [1]
+        "dataset_values": [3]
     },
     "scaling_options": {
         "architecture_values": [0,1],
@@ -57,7 +57,7 @@
         "network_bandwidth_values": [10],
         "io_bandwidth_values": [1],
         "memory_bandwidth_values": [1],
-        "dataset_values": [3]
+        "dataset_values": [4]
     },
     "scaling_algorithms": {
         "architecture_values": [2],
@@ -65,14 +65,14 @@
         "nodes_values": [4],
         "vpu_values": [16],
         "scaling_values": [1,2,3,4],
-        "cold_starts_values": [180],
+        "cold_starts_values": [60],
         "hit_rate_values": [1],
         "instance_values": [0],
         "arrival_rate_values": [0.1],
-        "network_bandwidth_values": [10],
+        "network_bandwidth_values": [5],
         "io_bandwidth_values": [1],
         "memory_bandwidth_values": [1],
-        "dataset_values": [0] 
+        "dataset_values": [4] 
     },
     "cold_starts": {
         "architecture_values": [1],
@@ -99,7 +99,7 @@
         "hit_rate_values": [0.6,0.65,0.7,0.75,0.8],
         "instance_values": [0],
         "arrival_rate_values": [0.1],
-        "network_bandwidth_values": [10],
+        "network_bandwidth_values": [1],
         "io_bandwidth_values": [1],
         "memory_bandwidth_values": [1],
         "dataset_values": [3]
@@ -111,7 +111,7 @@
         "vpu_values": [8],
         "scaling_values": [2],
         "cold_starts_values": [10],
-        "hit_rate_values": [1],
+        "hit_rate_values": [0.7],
         "instance_values": [0],
         "arrival_rate_values": [0.1],
         "network_bandwidth_values": [10],
@@ -124,7 +124,7 @@
         "scheduling_values": [1],
         "nodes_values": [16],
         "vpu_values": [8,16,24],
-        "scaling_values": [1],
+        "scaling_values": [2],
         "cold_starts_values": [60],
         "hit_rate_values": [1],
         "instance_values": [0],
