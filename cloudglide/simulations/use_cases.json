@@ -60,7 +60,7 @@
         "dataset_values": [3]
     },
     "scaling_options": {
-        "architecture_values": [0,1],
+        "architecture_values": [0],
         "scheduling_values": [1],
         "nodes_values": [2,4,8],
         "vpu_values": [2],

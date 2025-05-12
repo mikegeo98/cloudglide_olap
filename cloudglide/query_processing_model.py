@@ -196,7 +196,7 @@ def simulate_io_cached(
             if 1000 * job.data_scanned_progress > per_job_bandwidth * elapsed_time:
                 job.data_scanned_progress -= per_job_bandwidth * elapsed_time/1000
                 
-                print("IO Appended job", job.job_id, "now has", job.data_scanned_progress)
+                # print("IO Appended job", job.job_id, "now has", job.data_scanned_progress)
 
                 job.io_time += elapsed_time / 1000
 
@@ -206,7 +206,7 @@ def simulate_io_cached(
                 # compute how many ms are needed, always rounding up
                 finish_delta_ms = math.ceil(remaining_bytes / bandwidth_per_ms)
                 finish_time_ms = current_second + finish_delta_ms
-                print("IO Appended job", job.job_id, "expected to finish at", finish_time_ms, "bytes: ", remaining_bytes, "bandwidth", bandwidth_per_ms)
+                # print("IO Appended job", job.job_id, "expected to finish at", finish_time_ms, "bytes: ", remaining_bytes, "bandwidth", bandwidth_per_ms)
                 if job.scheduled:
                     # Already in the heap—always push an updated estimate
                     job.next_time = finish_time_ms
@@ -228,7 +228,7 @@ def simulate_io_cached(
                     per_job_bandwidth if per_job_bandwidth != 0 else 0
                 job.io_time += increment
                 job.data_scanned_progress = 0
-                print("IO Appended job", job.job_id, "now has", job.data_scanned_progress, "and finished at ", current_second)
+                # print("IO Appended job", job.job_id, "now has", job.data_scanned_progress, "and finished at ", current_second)
         else:
             # Remove job if data scan is complete
             if memory_tier == "DRAM":
@@ -528,7 +528,7 @@ def simulate_cpu_nodes(
                 elapsed_time = (current_second - max(job.start_timestamp, current_second - second_range))
                 # If job is in shuffle phase
                 if shuffle[job.job_id] == 1 and job.data_shuffle > 0 and job in shuffle_jobs:
-                    print("CPU Appended job", job.job_id, "now is shuffling")
+                    # print("CPU Appended job", job.job_id, "now is shuffling")
                     # Network bandwidth allocation per job
                     num_shuffle_jobs = len(shuffle_jobs)
                     per_job_bandwidth = network_bandwidth / \
@@ -550,14 +550,14 @@ def simulate_cpu_nodes(
                         job.cpu_time_progress -= required_cpu_time
                         job.processing_time += elapsed_time / 1000
                         
-                        print("CPU Appended job", job.job_id, "now has", job.cpu_time_progress)
+                        # print("CPU Appended job", job.job_id, "now has", job.cpu_time_progress)
 
                         remaining_ms = job.cpu_time_progress
                         finish_delta_ms = math.ceil(
                             remaining_ms / cores_assigned)
                         finish_time_ms = current_second + finish_delta_ms
                         
-                        print("CPU Appended job", job.job_id, "expected to finish at", finish_time_ms)
+                        # print("CPU Appended job", job.job_id, "expected to finish at", finish_time_ms)
 
                         # print(current_second, required_cpu_time, job.cpu_time_progress, cores_assigned, job.job_id)
                         if job.scheduled:
@@ -581,7 +581,7 @@ def simulate_cpu_nodes(
                             min(cores_assigned, cpu_cores_per_node) * 1000 * speedup_factor) > 0 else 0
                         job.processing_time += time_used
                         job.cpu_time_progress = 0
-                        print("CPU Appended job", job.job_id, "now has", job.cpu_time_progress, "and finished at ", current_second)
+                        # print("CPU Appended job", job.job_id, "now has", job.cpu_time_progress, "and finished at ", current_second)
 
                         job_finalization(job, memory, cpu_jobs, shuffle_jobs,
                                          finished_jobs, io_jobs, waiting_jobs, current_second)

@@ -194,8 +194,6 @@ def schedule_jobs(
     for job in jobs:
         heapq.heappush(events, Event(job.start, next_event_counter(), job, "arrival"))
 
-    print(len(events))
-
     # before the loop
     current_second = 0.0  # in seconds, rounded to 0.1s increments
     previous_second = 0.0
@@ -217,7 +215,7 @@ def schedule_jobs(
 
             second_range = current_second - previous_second
             # time.sleep(0.5)
-            print("We start at", current_second, "with", len(io_jobs), len(cpu_jobs))
+            # print("We start at", current_second, "with", len(io_jobs), len(cpu_jobs))
 
         # Calculate per-second cost
         if architecture != 3 or capacity_pricing:
@@ -241,7 +239,7 @@ def schedule_jobs(
             cpu_cores, memory, second_range
         )
 
-        print("After scheduling we have", len(io_jobs), len(cpu_jobs))
+        # print("After scheduling we have", len(io_jobs), len(cpu_jobs))
 
         # Logging information about running jobs if required
         # if simulation_params[3] == 1:
