@@ -1,0 +1,4 @@
+cloudglide/output_simulation/
+__pycache__/
+cloudglide/__pycache__/
+cloudglide/output_visual/

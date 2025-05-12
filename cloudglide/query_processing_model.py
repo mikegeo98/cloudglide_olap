@@ -1,6 +1,5 @@
 # query_processing_model2.py
 from cloudglide.event import Event, next_event_counter
-import heapq
 
 import heapq
 import random
@@ -193,24 +192,35 @@ def simulate_io_cached(
         if job.data_scanned_progress != 0:
             if per_job_bandwidth == 0:
                 continue  # Decide how to handle, e.g., skip or assign default bandwidth
-            if job.data_scanned_progress > per_job_bandwidth * second_range:
-                job.data_scanned_progress -= per_job_bandwidth * second_range
-                job.io_time += second_range
+            elapsed_time = (current_second - max(job.start_timestamp, current_second - second_range))
+            if 1000 * job.data_scanned_progress > per_job_bandwidth * elapsed_time:
+                job.data_scanned_progress -= per_job_bandwidth * elapsed_time/1000
+                
+                print("IO Appended job", job.job_id, "now has", job.data_scanned_progress)
 
-                new_finish = current_second + job.data_scanned_progress / per_job_bandwidth
+                job.io_time += elapsed_time / 1000
+
+                remaining_bytes = job.data_scanned_progress  # bytes
+                # if per_job_bandwidth is in bytes per second, first convert to bytes/ms
+                bandwidth_per_ms = per_job_bandwidth / 1000.0
+                # compute how many ms are needed, always rounding up
+                finish_delta_ms = math.ceil(remaining_bytes / bandwidth_per_ms)
+                finish_time_ms = current_second + finish_delta_ms
+                print("IO Appended job", job.job_id, "expected to finish at", finish_time_ms, "bytes: ", remaining_bytes, "bandwidth", bandwidth_per_ms)
                 if job.scheduled:
                     # Already in the heap—always push an updated estimate
-                    job.next_time = new_finish
+                    job.next_time = finish_time_ms
                     heapq.heappush(events, Event(
-                        new_finish, next(next_event_counter()), job, "io_done"))
+                        finish_time_ms, next_event_counter(), job, "io_done"))
                 else:
                     # No completion event yet—only schedule if it beats whatever is next
                     next_evt_time = peek_next_event_time(events)
-                    if new_finish <= next_evt_time:
+                    # print("io", new_finish, next_evt_time)
+                    if finish_time_ms <= next_evt_time:
                         job.scheduled = True
-                        job.next_time = new_finish
+                        job.next_time = finish_time_ms
                         heapq.heappush(events, Event(
-                            new_finish, next(next_event_counter()), job, "io_done"))
+                            finish_time_ms, next_event_counter(), job, "io_done"))
 
             else:
                 # Avoid division by zero
@@ -218,6 +228,7 @@ def simulate_io_cached(
                     per_job_bandwidth if per_job_bandwidth != 0 else 0
                 job.io_time += increment
                 job.data_scanned_progress = 0
+                print("IO Appended job", job.job_id, "now has", job.data_scanned_progress, "and finished at ", current_second)
         else:
             # Remove job if data scan is complete
             if memory_tier == "DRAM":
@@ -462,6 +473,7 @@ def simulate_cpu_nodes(
     shuffle: Dict[int, int],
     memory: List[float],
     second_range: float,
+    events: List[Event],
     parallelizable_portion: float = 0.9
 ):
     """
@@ -513,16 +525,18 @@ def simulate_cpu_nodes(
                     # No speedup
                     shuffle[job.job_id] = 0
 
+                elapsed_time = (current_second - max(job.start_timestamp, current_second - second_range))
                 # If job is in shuffle phase
                 if shuffle[job.job_id] == 1 and job.data_shuffle > 0 and job in shuffle_jobs:
+                    print("CPU Appended job", job.job_id, "now is shuffling")
                     # Network bandwidth allocation per job
                     num_shuffle_jobs = len(shuffle_jobs)
                     per_job_bandwidth = network_bandwidth / \
                         num_shuffle_jobs if num_shuffle_jobs > 0 else 0
 
-                    if job.data_shuffle > per_job_bandwidth * second_range:
-                        job.data_shuffle -= per_job_bandwidth * second_range
-                        job.shuffle_time += second_range
+                    if 1000 * job.data_shuffle > per_job_bandwidth * elapsed_time:
+                        job.data_shuffle -= per_job_bandwidth * elapsed_time / 1000
+                        job.shuffle_time += elapsed_time / 1000
                     else:
                         time_increment = job.data_shuffle / \
                             per_job_bandwidth if per_job_bandwidth != 0 else 0
@@ -531,21 +545,49 @@ def simulate_cpu_nodes(
                 else:
                     # Deduct CPU seconds based on cores allocated
                     required_cpu_time = min(
-                        cores_assigned, cpu_cores_per_node) * 1000 * speedup_factor * second_range
+                        cores_assigned, cpu_cores_per_node) * speedup_factor * elapsed_time
                     if job.cpu_time_progress > required_cpu_time:
                         job.cpu_time_progress -= required_cpu_time
-                        job.processing_time += second_range
+                        job.processing_time += elapsed_time / 1000
+                        
+                        print("CPU Appended job", job.job_id, "now has", job.cpu_time_progress)
+
+                        remaining_ms = job.cpu_time_progress
+                        finish_delta_ms = math.ceil(
+                            remaining_ms / cores_assigned)
+                        finish_time_ms = current_second + finish_delta_ms
+                        
+                        print("CPU Appended job", job.job_id, "expected to finish at", finish_time_ms)
+
+                        # print(current_second, required_cpu_time, job.cpu_time_progress, cores_assigned, job.job_id)
+                        if job.scheduled:
+                            # Already in the heap—always push an updated estimate
+                            job.next_time = finish_time_ms
+                            heapq.heappush(events, Event(
+                                finish_time_ms, next_event_counter(), job, "cpu_done"))
+                        else:
+                            # No completion event yet—only schedule if it beats whatever is next
+                            next_evt_time = peek_next_event_time(events)
+                            # print(events)
+                            if finish_time_ms <= next_evt_time:
+                                job.scheduled = True
+                                job.next_time = finish_time_ms
+                                heapq.heappush(events, Event(
+                                    finish_time_ms, next_event_counter(), job, "cpu_done"))
+
                     else:
                         # Finalize job execution if completed
                         time_used = job.cpu_time_progress / (min(cores_assigned, cpu_cores_per_node) * 1000 * speedup_factor) if (
                             min(cores_assigned, cpu_cores_per_node) * 1000 * speedup_factor) > 0 else 0
                         job.processing_time += time_used
                         job.cpu_time_progress = 0
+                        print("CPU Appended job", job.job_id, "now has", job.cpu_time_progress, "and finished at ", current_second)
+
                         job_finalization(job, memory, cpu_jobs, shuffle_jobs,
                                          finished_jobs, io_jobs, waiting_jobs, current_second)
             else:
                 # If no cores are assigned, increment CPU time but no progress
-                job.processing_time += second_range
+                job.processing_time += elapsed_time / 1000
 
 
 def job_finalization(
@@ -573,7 +615,7 @@ def job_finalization(
         None
     """
     memory[0] -= job.data_scanned / 4  # Adjust memory usage
-    job.end_timestamp = current_second * 1000
+    job.end_timestamp = current_second
     job.query_exec_time = max(job.io_time, job.processing_time)
     job.query_exec_time_queueing = job.query_exec_time + \
         max(job.queueing_delay, job.buffer_delay)

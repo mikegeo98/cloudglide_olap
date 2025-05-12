@@ -1,4 +1,5 @@
 import csv
+import math
 from cloudglide.event import Event, next_event_counter
 import heapq
 
@@ -111,9 +112,6 @@ def schedule_jobs(
     # Unpack execution parameters
     scheduling, scaling, nodes, cpu_cores, io_bandwidth, max_jobs, vpu, network_bandwidth, memory_bandwidth, memoryz, cold_start, hit_rate = execution_params
 
-    # Define iteration unit (simulation step)
-    second_range = 0.1 
-
     # Initialize Autoscaler if needed
     autoscaler = Autoscaler(cold_start, second_range) if architecture in [1, 2] else None
 
@@ -194,14 +192,33 @@ def schedule_jobs(
     events = []
     # Seed arrival events
     for job in jobs:
-        heapq.heappush(events, Event(job.start, next_event_counter(), "arrival", job))
+        heapq.heappush(events, Event(job.start, next_event_counter(), job, "arrival"))
 
+    print(len(events))
+
+    # before the loop
+    current_second = 0.0  # in seconds, rounded to 0.1s increments
+    previous_second = 0.0
     # Main simulation loop
-    while events:
-        ev = heapq.heappop(events)
-        print(ev)
-        second_range = ev.time - current_second
-        current_second = ev.time
+    while events or jobs or io_jobs or waiting_jobs or buffer_jobs or cpu_jobs:
+       
+        if len(events) > 0:
+            ev = heapq.heappop(events)
+            
+            raw = ev.time
+            
+            previous_second = current_second
+            
+            # Round *up* to the next tenth:
+            current_second = math.ceil(raw * 10) / 10
+
+            if(previous_second == current_second and current_second!=0.0):
+                continue
+
+            second_range = current_second - previous_second
+            # time.sleep(0.5)
+            print("We start at", current_second, "with", len(io_jobs), len(cpu_jobs))
+
         # Calculate per-second cost
         if architecture != 3 or capacity_pricing:
             money, vpu_charge, slots_charge = cost_calculator(
@@ -224,12 +241,14 @@ def schedule_jobs(
             cpu_cores, memory, second_range
         )
 
+        print("After scheduling we have", len(io_jobs), len(cpu_jobs))
+
         # Logging information about running jobs if required
-        if simulation_params[3] == 1:
-            df.loc[df["query_id"] == 13, "cpu_time"] *= 0.8(
-                f"Time {current_second}: I/O Jobs: {len(io_jobs)}, CPU Jobs: {len(cpu_jobs)}, "
-                f"Buffer Jobs: {len(buffer_jobs)}, Waiting Jobs: {len(waiting_jobs)}"
-            )
+        # if simulation_params[3] == 1:
+        #     df.loc[df["query_id"] == 13, "cpu_time"] *= 0.8(
+        #         f"Time {current_second}: I/O Jobs: {len(io_jobs)}, CPU Jobs: {len(cpu_jobs)}, "
+        #         f"Buffer Jobs: {len(buffer_jobs)}, Waiting Jobs: {len(waiting_jobs)}"
+        #     )
 
         # Simulate I/O operations based on architecture
         if architecture < 2:
@@ -254,7 +273,7 @@ def schedule_jobs(
                 current_second, cpu_jobs, cpu_cores,
                 cpu_cores_per_node, network_bandwidth,
                 finished_jobs, shuffled_jobs, io_jobs,
-                waiting_jobs, {}, memory, second_range
+                waiting_jobs, {}, memory, second_range, events
             )
         elif architecture == 2:
             simulate_cpu_autoscaling(
@@ -275,18 +294,18 @@ def schedule_jobs(
                 nodes, cpu_cores_per_node, io_bandwidth, cpu_cores,
                 base_n, memoryz, current_second, second_range
             )
-            if current_second % 60 == 0:
+            if current_second % 60000 == 0:
                 scale_observe.append(nodes)
         elif architecture == 2 and autoscaler:
             vpu, cpu_cores = autoscaler.autoscaling_ec(
                 scaling, cpu_jobs, io_jobs, waiting_jobs, buffer_jobs,
                 vpu, cpu_cores, base_cores, current_second, second_range
             )
-            if current_second % 60 == 0:
+            if current_second % 60000 == 0:
                 scale_observe.append(vpu)
 
         # Track memory usage every 60 seconds
-        if current_second % 60 == 0:
+        if current_second % 60000 == 0:
             if memoryz != 0:
                 mem_track.append(ceil((memory[0] / memoryz) * 100))
 
@@ -299,9 +318,6 @@ def schedule_jobs(
         elif interrupt_countdown > 0:
             interrupt_countdown -= 1
 
-        # Advance simulation time
-        # current_second += second_range
-        # current_second = round(current_second, 1)  # Round to 1 decimal place
 
         # Sleep to simulate real-time passage if needed
         time.sleep(simulation_params[1])
@@ -314,11 +330,11 @@ def schedule_jobs(
     if architecture in [0, 1]:
         total_price = money
     elif architecture == 2:
-        total_price = (second_range * vpu_charge) / 3600 * COST_PER_RPU_HOUR
+        total_price = (second_range * vpu_charge) / 3600000 * COST_PER_RPU_HOUR
     else:
         if architecture > 2:
             if capacity_pricing == 1:
-                total_price = slots_charge * second_range / 3600 * COST_PER_SLOT_HOUR
+                total_price = slots_charge * second_range / 3600000 * COST_PER_SLOT_HOUR
             else:
                 total_price = qaas_total_cost(costq)
         else:

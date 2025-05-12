@@ -61,13 +61,15 @@ def io_scheduler(
             # Schedule queued jobs from previous seconds
             duplicates = check_duplicate_job_ids(jobs)
             if duplicates:
-                logging.warning(f"Duplicate Job IDs found: {[job.job_id for job in duplicates]}")
+                logging.warning(
+                    f"Duplicate Job IDs found: {[job.job_id for job in duplicates]}")
 
-            for job in list(waiting_jobs):  # Iterate over a static list to allow modification
+            # Iterate over a static list to allow modification
+            for job in list(waiting_jobs):
                 if len(io_jobs) < cpu_cores:
                     if job.start_timestamp == 0.0:
-                        job.start_timestamp = current_second * 1000
-                    job.queueing_delay = current_second - (job.start / 1000)
+                        job.start_timestamp = current_second
+                    job.queueing_delay = (current_second - job.start) / 1000
                     io_jobs.append(job)
                     waiting_jobs.remove(job)
                 else:
@@ -76,21 +78,28 @@ def io_scheduler(
         if scheduling == 1:
             # Schedule queued jobs based on shortest Data_Scanned
             while waiting_jobs and len(io_jobs) < cpu_cores:
-                shortest_job = min(waiting_jobs, key=lambda job: job.data_scanned)  # Find the job with least data scanned
+                # Find the job with least data scanned
+                shortest_job = min(
+                    waiting_jobs, key=lambda job: job.data_scanned)
                 if shortest_job.start_timestamp == 0.0:
-                    shortest_job.start_timestamp = current_second * 1000
+                    shortest_job.start_timestamp = current_second
                     shortest_job.queueing_delay = 0
                 else:
-                    shortest_job.queueing_delay = current_second - (shortest_job.start / 1000)
+                    shortest_job.queueing_delay = (
+                        current_second - shortest_job.start) / 1000
                 io_jobs.append(shortest_job)
+                print("IO Appended job", shortest_job.job_id, "has", shortest_job.data_scanned_progress, "and started on ", shortest_job.start_timestamp)
                 waiting_jobs.remove(shortest_job)
 
         if scheduling == 2:
             # Schedule queued jobs based on longest Data_Scanned
             while waiting_jobs and len(io_jobs) < cpu_cores:
-                longest_job = max(waiting_jobs, key=lambda job: job.data_scanned)  # Find the job with most data scanned
-                longest_job.start_timestamp = current_second * 1000
-                longest_job.queueing_delay = current_second - (longest_job.start / 1000)
+                # Find the job with most data scanned
+                longest_job = max(
+                    waiting_jobs, key=lambda job: job.data_scanned)
+                longest_job.start_timestamp = current_second
+                longest_job.queueing_delay = (
+                    current_second - longest_job.start) / 1000
                 io_jobs.append(longest_job)
                 waiting_jobs.remove(longest_job)
         # Uncomment and refactor scheduling == 3 if needed
@@ -115,7 +124,7 @@ def io_scheduler(
 
     # Check for job arrivals during the current second - First-Come-First-Served
     for job in list(jobs):  # Iterate over a static list to allow modification
-        if current_second * 1000 <= job.start < (current_second + second_range) * 1000:
+        if current_second == job.start:
             waiting_jobs.append(job)
             # Concurrency Clause for I/O = Configurable
             if len(io_jobs) < cpu_cores or architecture > 2:
@@ -124,9 +133,11 @@ def io_scheduler(
                     job.start_timestamp = job.start
                     job.queueing_delay = 0
                 io_jobs.append(job)
+                print("IO Appended job", job.job_id,
+                      "has", job.data_scanned_progress, "and started on ", job.start_timestamp)
                 waiting_jobs.remove(job)
         # Stop checking if next job arrives later (assuming jobs are sorted by start time)
-        if job.start >= (current_second + second_range) * 1000:
+        if job.start > current_second:
             break
 
 
@@ -166,20 +177,25 @@ def cpu_scheduler(
     if scheduling == 1:
         # Shortest CPU Time First Scheduling
         while buffer_jobs and (len(cpu_jobs) < cpu_cores or architecture > 2):
-            shortest_job = min(buffer_jobs, key=lambda job: job.cpu_time)  # Find the job with least CPU time
+            # Find the job with least CPU time
+            shortest_job = min(buffer_jobs, key=lambda job: job.cpu_time)
             buffer_jobs.remove(shortest_job)
             memory[0] += shortest_job.data_scanned / 4
-            cpu_jobs.append(shortest_job)  # Append the shortest job to the CPU jobs list
+            # Append the shortest job to the CPU jobs list
+            cpu_jobs.append(shortest_job)
+            print("CPU Appended job", shortest_job.job_id, "has",shortest_job.cpu_time_progress, "and started on ", shortest_job.start_timestamp)
         for job in buffer_jobs:
             job.buffer_delay += second_range
 
     if scheduling == 2:
         # Longest CPU Time First Scheduling
         while buffer_jobs and (len(cpu_jobs) < cpu_cores or architecture > 2):
-            longest_job = max(buffer_jobs, key=lambda job: job.cpu_time)  # Find the job with most CPU time
+            # Find the job with most CPU time
+            longest_job = max(buffer_jobs, key=lambda job: job.cpu_time)
             buffer_jobs.remove(longest_job)
             memory[0] += longest_job.data_scanned / 4
-            cpu_jobs.append(longest_job)  # Append the longest job to the CPU jobs list
+            # Append the longest job to the CPU jobs list
+            cpu_jobs.append(longest_job)
         for job in buffer_jobs:
             job.buffer_delay += second_range
 
@@ -262,7 +278,7 @@ def cpu_scheduler(
 
     # Check for job arrivals during the current second - First-Come-First-Served
     for job in list(jobs):  # Iterate over a static list to allow modification
-        if current_second * 1000 <= job.start < (current_second + second_range) * 1000:
+        if current_second == job.start:
             buffer_jobs.append(job)
             jobs.remove(job)
             # Concurrency Clause for I/O = Configurable
@@ -272,7 +288,8 @@ def cpu_scheduler(
                     job.start_timestamp = job.start
                     job.queueing_delay = 0
                 cpu_jobs.append(job)
+                print("CPU Appended job", job.job_id, "has", job.cpu_time_progress, "and started on ", job.start_timestamp)
                 buffer_jobs.remove(job)
         # Stop checking if next job arrives later (assuming jobs are sorted by start time)
-        if job.start >= (current_second + second_range) * 1000:
+        if job.start > current_second:
             break
