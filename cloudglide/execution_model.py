@@ -1,9 +1,12 @@
 import csv
+from cloudglide.event import Event, next_event_counter
+import heapq
+
 import logging
 from math import ceil
 import random
 import time
-from collections import deque
+from collections import deque, namedtuple
 from typing import List, Tuple
 import numpy as np
 import pandas as pd
@@ -104,7 +107,6 @@ def schedule_jobs(
                                                  average query latency, average query with queueing latency,
                                                  and total price.
     """
-    print("test2")
     
     # Unpack execution parameters
     scheduling, scaling, nodes, cpu_cores, io_bandwidth, max_jobs, vpu, network_bandwidth, memory_bandwidth, memoryz, cold_start, hit_rate = execution_params
@@ -189,9 +191,17 @@ def schedule_jobs(
     # Sort jobs by start time
     jobs.sort(key=lambda job: job.start)
 
-    # Main simulation loop
-    while jobs or io_jobs or waiting_jobs or buffer_jobs or cpu_jobs:
+    events = []
+    # Seed arrival events
+    for job in jobs:
+        heapq.heappush(events, Event(job.start, next_event_counter(), "arrival", job))
 
+    # Main simulation loop
+    while events:
+        ev = heapq.heappop(events)
+        print(ev)
+        second_range = ev.time - current_second
+        current_second = ev.time
         # Calculate per-second cost
         if architecture != 3 or capacity_pricing:
             money, vpu_charge, slots_charge = cost_calculator(
@@ -227,7 +237,7 @@ def schedule_jobs(
                 current_second, hit_rate, nodes, io_jobs, io_bandwidth,
                 memory_bandwidth, network_bandwidth, buffer_jobs, cpu_jobs,
                 finished_jobs, job_memory_tiers, dram_nodes,
-                dram_job_counts, second_range
+                dram_job_counts, second_range, events
             )
         elif architecture == 2:
             simulate_io_elastic_pool(
@@ -236,7 +246,7 @@ def schedule_jobs(
             )
         else:
             simulate_io_qaas(io_jobs, network_bandwidth,
-                             buffer_jobs, second_range,cpu_jobs, finished_jobs)
+                             buffer_jobs, second_range, cpu_jobs, finished_jobs)
 
         # Simulate CPU operations based on architecture
         if architecture < 2:
@@ -290,8 +300,8 @@ def schedule_jobs(
             interrupt_countdown -= 1
 
         # Advance simulation time
-        current_second += second_range
-        current_second = round(current_second, 1)  # Round to 1 decimal place
+        # current_second += second_range
+        # current_second = round(current_second, 1)  # Round to 1 decimal place
 
         # Sleep to simulate real-time passage if needed
         time.sleep(simulation_params[1])

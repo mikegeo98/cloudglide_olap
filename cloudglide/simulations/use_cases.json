@@ -14,6 +14,21 @@
         "memory_bandwidth_values": [40000],
         "dataset_values": [21]
     },
+    "biggo": {
+        "architecture_values": [0],
+        "scheduling_values": [1],
+        "nodes_values": [64],
+        "vpu_values": [1],
+        "scaling_values": [1],
+        "cold_starts_values": [180],
+        "hit_rate_values": [0.6],
+        "instance_values": [0],
+        "arrival_rate_values": [0.1],
+        "network_bandwidth_values": [10],
+        "io_bandwidth_values": [650],
+        "memory_bandwidth_values": [40000],
+        "dataset_values": [22]
+    },
     "scheduling_2_nodes": {
         "architecture_values": [0],
         "scheduling_values": [0,1,2,4],
