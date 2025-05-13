@@ -172,7 +172,7 @@ def cpu_scheduler(
             memory[0] += next_job.data_scanned / 4
             cpu_jobs.append(next_job)  # Append the job to the CPU jobs list
         for job in buffer_jobs:
-            job.buffer_delay += second_range
+            job.buffer_delay += second_range / 1000
 
     if scheduling == 1:
         # Shortest CPU Time First Scheduling
@@ -185,7 +185,7 @@ def cpu_scheduler(
             cpu_jobs.append(shortest_job)
             # print("CPU Appended job", shortest_job.job_id, "has",shortest_job.cpu_time_progress, "and started on ", shortest_job.start_timestamp)
         for job in buffer_jobs:
-            job.buffer_delay += second_range
+            job.buffer_delay += second_range / 1000
 
     if scheduling == 2:
         # Longest CPU Time First Scheduling
@@ -197,7 +197,7 @@ def cpu_scheduler(
             # Append the longest job to the CPU jobs list
             cpu_jobs.append(longest_job)
         for job in buffer_jobs:
-            job.buffer_delay += second_range
+            job.buffer_delay += second_range / 1000
 
     if scheduling == 4:
         # Priority-Based Scheduling
@@ -274,7 +274,7 @@ def cpu_scheduler(
 
         # Increment wait time for all remaining jobs in the buffer
         for job in buffer_jobs:
-            job.buffer_delay += second_range
+            job.buffer_delay += second_range / 1000
 
     # Check for job arrivals during the current second - First-Come-First-Served
     for job in list(jobs):  # Iterate over a static list to allow modification
