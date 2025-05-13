@@ -62,7 +62,7 @@
     "scaling_options": {
         "architecture_values": [0],
         "scheduling_values": [1],
-        "nodes_values": [2,4,8],
+        "nodes_values": [1,2,4,8],
         "vpu_values": [2],
         "scaling_values": [4],
         "cold_starts_values": [10],
