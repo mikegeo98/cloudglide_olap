@@ -183,7 +183,7 @@ def cpu_scheduler(
             memory[0] += shortest_job.data_scanned / 4
             # Append the shortest job to the CPU jobs list
             cpu_jobs.append(shortest_job)
-            # print("CPU Appended job", shortest_job.job_id, "has",shortest_job.cpu_time_progress, "and started on ", shortest_job.start_timestamp)
+            print("CPU Appended job", shortest_job.job_id, "has",shortest_job.cpu_time_progress, "and started on ", shortest_job.start_timestamp)
         for job in buffer_jobs:
             job.buffer_delay += second_range
 
@@ -288,7 +288,7 @@ def cpu_scheduler(
                     job.start_timestamp = job.start
                     job.queueing_delay = 0
                 cpu_jobs.append(job)
-                # print("CPU Appended job", job.job_id, "has", job.cpu_time_progress, "and started on ", job.start_timestamp)
+                print("CPU Appended job", job.job_id, "has", job.cpu_time_progress, "and started on ", job.start_timestamp)
                 buffer_jobs.remove(job)
         # Stop checking if next job arrives later (assuming jobs are sorted by start time)
         if job.start > current_second:

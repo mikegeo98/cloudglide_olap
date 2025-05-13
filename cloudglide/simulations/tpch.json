@@ -2,7 +2,7 @@
     "tpch_all": {
         "architecture_values": [0],
         "scheduling_values": [1],
-        "nodes_values": [1,2,4,8],
+        "nodes_values": [2],
         "vpu_values": [1],
         "scaling_values": [1],
         "cold_starts_values": [180],
