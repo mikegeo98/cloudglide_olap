@@ -122,7 +122,7 @@ class Autoscaler:
 
         # Predictive Autoscaling
         elif strategy == 3:  # Predictive Autoscaling
-            if current_second - self.last_observation_time >= 10:  # Check if 10 seconds have passed
+            if current_second - self.last_observation_time >= 10000:  # Check if 10 seconds have passed
                 combined_length = len(buffer_jobs) + len(cpu_jobs)
                 self.history.append(combined_length)
                 self.last_observation_time = current_second
@@ -145,7 +145,7 @@ class Autoscaler:
 
         # Predictive Autoscaling
         elif strategy == 4:  # Predictive Autoscaling
-            if current_second - self.last_observation_time >= 10:  # Check if 10 seconds have passed
+            if current_second - self.last_observation_time >= 10000:  # Check if 10 seconds have passed
                 combined_length = len(buffer_jobs) + len(cpu_jobs)
                 self.history.append(combined_length)
                 self.last_observation_time = current_second  # Reset the timer
@@ -221,7 +221,7 @@ class Autoscaler:
 
         # Predictive Autoscaling
         elif strategy == 3:  # Predictive Autoscaling
-            if current_second - self.last_observation_time >= 10:  # Check if 10 seconds have passed
+            if current_second - self.last_observation_time >= 10000:  # Check if 10 seconds have passed
                 combined_length = len(buffer_jobs) + len(cpu_jobs)
                 self.history.append(combined_length)
                 self.last_observation_time = current_second
@@ -244,7 +244,7 @@ class Autoscaler:
 
         # Predictive Autoscaling
         elif strategy == 4:  # Predictive Autoscaling
-            if current_second - self.last_observation_time >= 10:  # Check if 10 seconds have passed
+            if current_second - self.last_observation_time >= 10000:  # Check if 10 seconds have passed
                 combined_length = len(buffer_jobs) + len(cpu_jobs)
                 self.history.append(combined_length)
                 self.last_observation_time = current_second  # Reset the timer
