@@ -1,12 +1,15 @@
 from collections import deque
+import heapq
+
+from cloudglide.event import Event, next_event_counter
 
 
 class Autoscaler:
-    def __init__(self, cold_start, second_range):
+    def __init__(self, cold_start):
         self.scaling_out_flag = False
         self.scaling_in_flag = False
         self.scaling_counter = 0
-        self.cold_start_limit = cold_start  # Cold start limit in seconds
+        self.cold_start_limit = cold_start * 1000 # Cold start limit in seconds
         self.history = deque(maxlen=10)  # Store history of last 10 values
         self.last_observation_time = 0  # Initialize the observation timer
         self.pending_scale_out = 0
@@ -68,24 +71,29 @@ class Autoscaler:
 
     def autoscaling_dw(self, strategy, cpu_jobs, io_jobs, waiting_jobs,
                        buffer_jobs, nodes, cpu_cores_per_node, io_bandwidth,
-                       cpu_cores, base_n, memory, current_second, second_range):
+                       cpu_cores, base_n, memory, current_second, second_range, events):
         if strategy == 1:  # queue-based
             if not self.scaling_out_flag and not self.scaling_in_flag:
                 if len(buffer_jobs) > 20 or len(waiting_jobs) > 20:  # Scaling out condition
                     # print("Clause 1: Requesting Scale-Out", current_second)
                     self.scale_out(16)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 elif len(buffer_jobs) > 15 or len(waiting_jobs) > 15:  # Scaling out condition
                     # print("Clause 2: Requesting Scale-Out", current_second)
                     self.scale_out(12)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 elif len(buffer_jobs) > 10 or len(waiting_jobs) > 10:  # Scaling out condition
                     # print("Clause 3: Requesting Scale-Out", current_second)
                     self.scale_out(8)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 elif len(buffer_jobs) > 5 or len(waiting_jobs) > 5:  # Scaling out condition
                     # print("Clause 4: Requesting Scale-Out", current_second)
                     self.scale_out(4)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 elif (len(cpu_jobs) < 0.4 * cpu_cores and nodes > base_n) or (len(io_jobs) < 0.4 * cpu_cores and nodes > base_n):  # Scaling in condition
                     # print("Requesting Scale-In", current_second)
                     self.scale_in(4)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
 
         # reactive
         elif strategy == 2:  # reactive_utilization_threshold

@@ -34,6 +34,7 @@ class Job:
     priority_level: int = 0
     scheduled: bool = field(init=False, default=False)
     next_time: float | None = field(init=False, default=None)
+    dram_node_index: int | None = field(init=False, default=None)
     
     def __post_init__(self):
         self.data_shuffle = self.calculate_data_shuffle()

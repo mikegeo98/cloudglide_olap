@@ -113,7 +113,7 @@ def schedule_jobs(
     scheduling, scaling, nodes, cpu_cores, io_bandwidth, max_jobs, vpu, network_bandwidth, memory_bandwidth, memoryz, cold_start, hit_rate = execution_params
 
     # Initialize Autoscaler if needed
-    autoscaler = Autoscaler(cold_start, second_range) if architecture in [1, 2] else None
+    autoscaler = Autoscaler(cold_start) if architecture in [1, 2] else None
 
     # Initialize job queues and tracking variables
     waiting_jobs = deque()
@@ -290,7 +290,7 @@ def schedule_jobs(
             nodes, cpu_cores, io_bandwidth, memoryz = autoscaler.autoscaling_dw(
                 scaling, cpu_jobs, io_jobs, waiting_jobs, buffer_jobs,
                 nodes, cpu_cores_per_node, io_bandwidth, cpu_cores,
-                base_n, memoryz, current_second, second_range
+                base_n, memoryz, current_second, second_range, events
             )
             if current_second % 60000 == 0:
                 scale_observe.append(nodes)

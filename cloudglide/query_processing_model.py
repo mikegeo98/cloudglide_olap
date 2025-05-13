@@ -141,14 +141,13 @@ def simulate_io_cached(
 
         # Assign memory tier if not already assigned
         if job_key not in job_memory_tiers:
-            # Assuming parameters as per original code
             assigned_tier = assign_memory_tier(hit_rate)
             job_memory_tiers[job_key] = assigned_tier
 
             if assigned_tier == "DRAM":
-                node_index = job_key % num_nodes  # Simple distribution based on job_id
-                dram_nodes[node_index].append(job)
-                dram_job_counts[node_index] += 1
+                job.dram_node_index = job_key % num_nodes
+                dram_nodes[job.dram_node_index].append(job)
+                dram_job_counts[job.dram_node_index] += 1
 
         # Collect job and its memory tier for Phase 2
         memory_tier = job_memory_tiers[job_key]
@@ -229,16 +228,15 @@ def simulate_io_cached(
                 job.io_time += increment
                 job.data_scanned_progress = 0
                 # print("IO Appended job", job.job_id, "now has", job.data_scanned_progress, "and finished at ", current_second)
-        else:
+            if job.data_scanned_progress == 0:
             # Remove job if data scan is complete
-            if memory_tier == "DRAM":
-                node_index = job_key % num_nodes
-                if job in dram_nodes[node_index]:
-                    dram_nodes[node_index].remove(job)
-                    dram_job_counts[node_index] -= 1
+            # remove from the exact node we originally assigned
+                idx = job.dram_node_index
+                if idx is not None and job in dram_nodes[idx]:
+                    dram_nodes[idx].remove(job)
+                    dram_job_counts[idx] -= 1
                 else:
-                    logging.warning(
-                        f"Job ID {job_key} not found in DRAM Node {node_index} during removal.")
+                    logging.warning(f"Job ID {job_key} not found in DRAM Node {idx} during removal.")
 
             io_jobs.remove(job)
             if job not in buffer_jobs and job not in cpu_jobs:
@@ -605,8 +603,8 @@ def simulate_cpu_nodes(
                         job.data_shuffle = 0
                 if job.data_shuffle == 0 or shuffle[job.job_id] == 0: # IF YOU WANT TO SPLIT THEM LOGICALLY UNCOMMENT THIS - BUT THEN FIX THE ALLOCATION ISSUE
                     # Deduct CPU seconds based on cores allocated
-                    required_cpu_time = min(
-                        cores_assigned, cpu_cores_per_node) * speedup_factor * elapsed_time
+                    required_cpu_time = min(cores_assigned, cpu_cores_per_node) * speedup_factor * elapsed_time
+
                     if job.cpu_time_progress > required_cpu_time:
                         job.cpu_time_progress -= required_cpu_time
                         job.processing_time += elapsed_time / 1000

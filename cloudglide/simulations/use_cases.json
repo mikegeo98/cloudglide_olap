@@ -60,11 +60,11 @@
         "dataset_values": [3]
     },
     "scaling_options": {
-        "architecture_values": [0],
+        "architecture_values": [1],
         "scheduling_values": [1],
-        "nodes_values": [1,2,4,8],
+        "nodes_values": [1],
         "vpu_values": [2],
-        "scaling_values": [4],
+        "scaling_values": [2],
         "cold_starts_values": [10],
         "hit_rate_values": [0.7],
         "instance_values": [0],
