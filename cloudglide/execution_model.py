@@ -215,7 +215,7 @@ def schedule_jobs(
 
             second_range = current_second - previous_second
             # time.sleep(0.5)
-            print("We start at", current_second, "with", len(io_jobs), len(cpu_jobs))
+            # print("We start at", current_second, "with", len(io_jobs), len(cpu_jobs))
 
         # Calculate per-second cost
         if architecture != 3 or capacity_pricing:
