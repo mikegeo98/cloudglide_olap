@@ -379,8 +379,9 @@ def simulate_io_qaas(
 
 def assign_cores_to_jobs(
     cpu_jobs: List[Job],
+    shuffle,
     num_cores: int,
-    time_limit: float
+    current_second
 ) -> List[int]:
     """
     Assigns cores to CPU-bound jobs based on their CPU time requirements.
@@ -393,39 +394,69 @@ def assign_cores_to_jobs(
     Returns:
         List[int]: Number of cores allocated to each job.
     """
-    required_cores = [math.ceil(job.cpu_time / (time_limit * 1000))
-                      for job in cpu_jobs]
-    total_required_cores = sum(required_cores)
+    time_limit = 10
+    
+    n = len(cpu_jobs)
+    allocations = [0] * n
 
-    initial_cores_per_job = num_cores // len(cpu_jobs) if cpu_jobs else 0
-    core_allocation = [min(1, initial_cores_per_job) for _ in cpu_jobs]
+    # 1) Identify which jobs have actually started
+    eligible = [
+        i for i, job in enumerate(cpu_jobs)
+        if (current_second - job.start_timestamp > 0)
+        and (
+            # either it has no shuffle left…
+            job.data_shuffle == 0
+            # …or, if it’s in the shuffle dict, its value is 0
+            or shuffle.get(job.job_id, 0) == 0
+        )
+    ]
+    n = len(eligible)
+    if n == 0:
+        return allocations  # no one gets cores
 
-    if num_cores > len(cpu_jobs):
-        num_cores_remaining = num_cores - len(cpu_jobs)
+        # If fewer cores than jobs, give one core to the first num_cores jobs
+    if num_cores <= n:
+        alloc = [1 if i < num_cores else 0 for i in range(n)]
+        return alloc
 
-        for i, job_cores in enumerate(required_cores):
-            allocated_cores = (
-                job_cores / total_required_cores) * num_cores_remaining
-            core_allocation[i] += math.floor(allocated_cores)
+    # Everyone gets at least one core
+    alloc = [1] * n
+    extras = num_cores - n
 
-        # Distribute any remaining cores
-        remaining_cores = num_cores_remaining - \
-            sum(math.floor((job_cores / total_required_cores) * num_cores_remaining)
-                for job_cores in required_cores)
-        for i in range(remaining_cores):
-            core_allocation[i % len(core_allocation)] += 1
+    # Compute each job's 'weight' based on required CPU time
+    required = [math.ceil(job.cpu_time / (time_limit * 1000)) for job in cpu_jobs]
+    total_req = sum(required)
+    if total_req == 0:
+        # If no job requires CPU time (edge-case), spread extras evenly
+        for i in range(extras):
+            alloc[i % n] += 1
+        return alloc
 
-    else:
-        for i in range(num_cores):
-            core_allocation[i] += 1
+    # Compute each job's ideal extra share (as float)
+    ideal = [req / total_req * extras for req in required]
 
-    return core_allocation
+    # Take the floor of each share, track remainders
+    floors     = [math.floor(x) for x in ideal]
+    remainders = [ideal[i] - floors[i] for i in range(n)]
+
+    # Add the floored extras
+    for i in range(n):
+        alloc[i] += floors[i]
+
+    used = sum(floors)
+    left = extras - used  # how many cores remain to distribute
+
+    # Distribute the remaining cores to jobs with largest remainder
+    for i in sorted(range(n), key=lambda i: remainders[i], reverse=True)[:left]:
+        alloc[i] += 1
+
+    return alloc
 
 
 def assign_cores_to_jobs_autoscaling(
     cpu_jobs: List[Job],
     num_cores: int,
-    time_limit: float
+    current_second: float
 ) -> List[int]:
     """
     Assigns cores to CPU-bound jobs based on their CPU time requirements for autoscaling.
@@ -501,7 +532,7 @@ def simulate_cpu_nodes(
 
     if num_jobs > 0:
         # Assign cores based on job requirements
-        core_allocation = assign_cores_to_jobs(cpu_jobs, cpu_cores, 10)
+        core_allocation = assign_cores_to_jobs(cpu_jobs, shuffle, cpu_cores, current_second)
 
         # Iterate through jobs and their assigned cores
         for job, cores_assigned in zip(cpu_jobs.copy(), core_allocation):
@@ -516,6 +547,7 @@ def simulate_cpu_nodes(
         for job, cores_assigned in zip(cpu_jobs.copy(), core_allocation):
             speedup_factor = 1.0
             nodes_involved = 1.0
+            elapsed_time = (current_second - max(job.start_timestamp, current_second - second_range))
             if cores_assigned != 0:
                 if cores_assigned > cpu_cores_per_node:
                     # Speedup calculation using Amdahl's Law (parameterized parallel portion)
@@ -527,7 +559,7 @@ def simulate_cpu_nodes(
                 else:
                     # No speedup
                     shuffle[job.job_id] = 0
-                elapsed_time = (current_second - max(job.start_timestamp, current_second - second_range))
+                
                 # If job is in shuffle phase
                 if shuffle[job.job_id] == 1 and job.data_shuffle > 0 and job in shuffle_jobs:
                     # print("CPU Appended job", job.job_id, "now is shuffling")
@@ -571,10 +603,10 @@ def simulate_cpu_nodes(
                         job.shuffle_time += time_increment
                         # print("Shuffle Appended job", job.job_id, "finished at", current_second)
                         job.data_shuffle = 0
-                if job.data_shuffle == 0 or shuffle[job.job_id] == 0:
+                if job.data_shuffle == 0 or shuffle[job.job_id] == 0: # IF YOU WANT TO SPLIT THEM LOGICALLY UNCOMMENT THIS - BUT THEN FIX THE ALLOCATION ISSUE
                     # Deduct CPU seconds based on cores allocated
                     required_cpu_time = min(
-                        cores_assigned, cpu_cores_per_node) * nodes_involved * speedup_factor * elapsed_time
+                        cores_assigned, cpu_cores_per_node) * speedup_factor * elapsed_time
                     if job.cpu_time_progress > required_cpu_time:
                         job.cpu_time_progress -= required_cpu_time
                         job.processing_time += elapsed_time / 1000
@@ -612,7 +644,7 @@ def simulate_cpu_nodes(
                         # print("CPU Appended job", job.job_id, "now has", job.cpu_time_progress, "and finished at ", current_second)
 
                         job_finalization(job, memory, cpu_jobs, shuffle_jobs,
-                                         finished_jobs, io_jobs, waiting_jobs, current_second)
+                                            finished_jobs, io_jobs, waiting_jobs, current_second)
             else:
                 # If no cores are assigned, increment CPU time but no progress
                 job.processing_time += elapsed_time / 1000
