@@ -571,7 +571,7 @@ def simulate_cpu_nodes(
                         job.shuffle_time += time_increment
                         print("Shuffle Appended job", job.job_id, "finished at", current_second)
                         job.data_shuffle = 0
-                else:
+                if job.data_shuffle == 0:
                     # Deduct CPU seconds based on cores allocated
                     required_cpu_time = min(
                         cores_assigned, cpu_cores_per_node) * nodes_involved * speedup_factor * elapsed_time
