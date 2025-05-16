@@ -239,7 +239,7 @@ def schedule_jobs(
             cpu_cores, memory, second_range
         )
 
-        # print("After scheduling we have", len(io_jobs), len(cpu_jobs))
+        # print("After scheduling we have", len(io_jobs), len(cpu_jobs), cpu_cores)
 
         # Logging information about running jobs if required
         # if simulation_params[3] == 1:
@@ -259,7 +259,8 @@ def schedule_jobs(
         elif architecture == 2:
             simulate_io_elastic_pool(
                 current_second, hit_rate, base_cores, cpu_cores, io_jobs,
-                io_bandwidth, memory_bandwidth, buffer_jobs, {}, second_range
+                io_bandwidth, memory_bandwidth, buffer_jobs, cpu_jobs,
+                finished_jobs, {}, second_range, events
             )
         else:
             simulate_io_qaas(io_jobs, network_bandwidth,
@@ -278,7 +279,7 @@ def schedule_jobs(
                 current_second, cpu_jobs, base_cores,
                 cpu_cores, network_bandwidth,
                 finished_jobs, shuffled_jobs,
-                io_jobs, {}, memory, second_range
+                io_jobs, waiting_jobs, {}, memory, second_range, events
             )
         else:
             slots = simulate_cpu_qaas(
@@ -297,7 +298,7 @@ def schedule_jobs(
         elif architecture == 2 and autoscaler:
             vpu, cpu_cores = autoscaler.autoscaling_ec(
                 scaling, cpu_jobs, io_jobs, waiting_jobs, buffer_jobs,
-                vpu, cpu_cores, base_cores, current_second, second_range
+                vpu, cpu_cores, base_cores, current_second, second_range, events
             )
             if current_second % 60000 == 0:
                 scale_observe.append(vpu)

@@ -55,12 +55,12 @@ class Autoscaler:
             if self.scaling_counter >= self.cold_start_limit:
                 if self.scaling_out_flag:
                     scale_out_amount = min(max(4, self.pending_scale_out), 16)  # Dynamic scaling out amount
-                    # print(f"Scaling out to {vpu + scale_out_amount} vpus", current_second)
+                    # print(f"Scaling out to {vpu + scale_out_amount} vpus")
                     vpu += scale_out_amount
                     cpu_cores = vpu  
                 if self.scaling_in_flag:
                     scale_in_amount = min(max(4, self.pending_scale_in), vpu - base_cores)  # Dynamic scaling in amount
-                    # print(f"Scaling in to {vpu - scale_in_amount} vpus", current_second)
+                    # print(f"Scaling in to {vpu - scale_in_amount} vpus")
                     vpu -= scale_in_amount
                     cpu_cores = vpu
                 self.scaling_out_flag = False
@@ -102,14 +102,17 @@ class Autoscaler:
                     # print("Requesting Scale-Out", current_second)
                     # print(len(cpu_jobs), len(buffer_jobs), cpu_cores)
                     self.scale_out(24)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 if len(cpu_jobs) > 0.7 * cpu_cores:  # Scaling out condition
                     # print("Requesting Scale-Out", current_second)
                     # print(len(cpu_jobs), len(buffer_jobs), cpu_cores)
                     self.scale_out(16)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 if len(cpu_jobs) > 0.6 * cpu_cores:  # Scaling out condition
                     # print("Requesting Scale-Out", current_second)
                     # print(len(cpu_jobs), len(buffer_jobs), cpu_cores)
                     self.scale_out(8)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 # if len(cpu_jobs) > 0.5 * cpu_cores:  # Scaling out condition
                     # print("Requesting Scale-Out", current_second)
                     # print(len(cpu_jobs), len(buffer_jobs), cpu_cores)
@@ -119,6 +122,7 @@ class Autoscaler:
                     # print("Requesting Scale-In", current_second)
                     # print(len(cpu_jobs), len(buffer_jobs), cpu_cores)
                     self.scale_in(8)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
 
         # Predictive Autoscaling
         elif strategy == 3:  # Predictive Autoscaling
@@ -140,8 +144,10 @@ class Autoscaler:
                         # Check if there is a significant increase (e.g., 40%)
                         if (current_moving_average > 1.2 * previous_moving_average) or len(cpu_jobs) > 0.75 * cpu_cores:
                             self.scale_out(4)
+                            heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                         elif current_moving_average < 0.75 * previous_moving_average and nodes > base_n:
                             self.scale_in(4)
+                            heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
 
         # Predictive Autoscaling
         elif strategy == 4:  # Predictive Autoscaling
@@ -158,9 +164,11 @@ class Autoscaler:
                     # Scale out if current length is at least 25% greater than 10 measurements ago
                     if current_length >= 1.5 * previous_length:
                         self.scale_out(4)
+                        heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                     # Scale in if current length is at least 25% less than 10 measurements ago and nodes > base_n
                     elif current_length <= 0.75 * previous_length and nodes > base_n:
                         self.scale_in(4)
+                        heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
 
         # Reactive
         elif strategy == 5:  # reactive_utilization_threshold
@@ -168,11 +176,13 @@ class Autoscaler:
                 # Scaling out condition
                 if len(cpu_jobs) > 0.75 * cpu_cores or len(buffer_jobs) > 0.8 * cpu_cores:
                     self.scale_out(8)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 # elif len(cpu_jobs) > 0.7 * cpu_cores or len(buffer_jobs) > 0.6 * cpu_cores:
                 #     self.scale_out(4)
                 # Scaling in condition
                 elif len(cpu_jobs) < 0.2 * cpu_cores and nodes > base_n:
                     self.scale_in(8)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 # elif len(cpu_jobs) < 0.2 * cpu_cores and cpu_cores > base_cores + 4:
                 #     self.scale_in(4)
 
@@ -182,33 +192,41 @@ class Autoscaler:
     def calculate_moving_average(self, data):
         return sum(data) / len(data)
 
-    def autoscaling_ec(self, strategy, cpu_jobs, io_jobs, waiting_jobs, buffer_jobs, vpu, cpu_cores, base_cores, current_second, second_range):
+    def autoscaling_ec(self, strategy, cpu_jobs, io_jobs, waiting_jobs, buffer_jobs, vpu, cpu_cores, base_cores, current_second, second_range, events):
         if strategy == 1:  # queue-based
             if not self.scaling_out_flag and not self.scaling_in_flag:
                 if len(buffer_jobs) > 20 or len(waiting_jobs) > 20:
                     self.scale_out(16)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 elif len(buffer_jobs) > 15 or len(waiting_jobs) > 15:
                     self.scale_out(12)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 elif len(buffer_jobs) > 10 or len(waiting_jobs) > 10:
                     self.scale_out(8)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 elif len(buffer_jobs) > 5 or len(waiting_jobs) > 5:
                     self.scale_out(4)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 elif (len(cpu_jobs) < 0.4 * cpu_cores and cpu_cores > base_cores) or (len(io_jobs) < 0.4 * cpu_cores and cpu_cores > base_cores):  # Scaling in condition
                     self.scale_in(4)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
 
         # Reactive
         elif strategy == 2:  # reactive_utilization_threshold
             if not self.scaling_out_flag and not self.scaling_in_flag:
                 if len(cpu_jobs) > 0.8 * cpu_cores:  # Scaling out condition
                     self.scale_out(24)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 if len(cpu_jobs) > 0.7 * cpu_cores:  # Scaling out condition
                     # print("Requesting Scale-Out", current_second)
                     # print(len(cpu_jobs), len(buffer_jobs), cpu_cores)
                     self.scale_out(16)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 if len(cpu_jobs) > 0.6 * cpu_cores:  # Scaling out condition
                     # print("Requesting Scale-Out", current_second)
                     # print(len(cpu_jobs), len(buffer_jobs), cpu_cores)
                     self.scale_out(8)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 # if len(cpu_jobs) > 0.5 * cpu_cores:  # Scaling out condition
                     # print("Requesting Scale-Out", current_second)
                     # print(len(cpu_jobs), len(buffer_jobs), cpu_cores)
@@ -218,6 +236,7 @@ class Autoscaler:
                     # print("Requesting Scale-In", current_second)
                     # print(len(cpu_jobs), len(buffer_jobs), cpu_cores)
                     self.scale_in(8)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
 
         # Predictive Autoscaling
         elif strategy == 3:  # Predictive Autoscaling
@@ -239,8 +258,10 @@ class Autoscaler:
                         # Check if there is a significant increase (e.g., 40%)
                         if (current_moving_average > 1.2 * previous_moving_average) or len(cpu_jobs) > 0.75 * cpu_cores:
                             self.scale_out(4)
+                            heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                         elif current_moving_average < 0.75 * previous_moving_average and cpu_cores > base_cores:
                             self.scale_in(4)
+                            heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
 
         # Predictive Autoscaling
         elif strategy == 4:  # Predictive Autoscaling
@@ -257,9 +278,11 @@ class Autoscaler:
                     # Scale out if current length is at least 25% greater than 10 measurements ago
                     if current_length >= 1.5 * previous_length:
                         self.scale_out(4)
+                        heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                     # Scale in if current length is at least 25% less than 10 measurements ago and nodes > base_n
                     elif current_length <= 0.75 * previous_length and cpu_cores > base_cores:
                         self.scale_in(4)
+                        heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
 
         # Reactive
         elif strategy == 5:  # reactive_utilization_threshold
@@ -267,11 +290,13 @@ class Autoscaler:
                 # Scaling out condition
                 if len(cpu_jobs) > 0.75 * cpu_cores or len(buffer_jobs) > 0.8 * cpu_cores:
                     self.scale_out(8)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 # elif len(cpu_jobs) > 0.7 * cpu_cores or len(buffer_jobs) > 0.6 * cpu_cores:
                 #     self.scale_out(4)
                 # Scaling in condition
                 elif len(cpu_jobs) < 0.2 * cpu_cores and cpu_cores > base_cores + 8:
                     self.scale_in(8)
+                    heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                 # elif len(cpu_jobs) < 0.2 * cpu_cores and cpu_cores > base_cores + 4:
                 #     self.scale_in(4)
         vpu, cpu_cores = self.reset_scaling_flag_ec(vpu, cpu_cores, base_cores,

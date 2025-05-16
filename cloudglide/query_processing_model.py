@@ -220,7 +220,6 @@ def simulate_io_cached(
                         job.next_time = finish_time_ms
                         heapq.heappush(events, Event(
                             finish_time_ms, next_event_counter(), job, "io_done"))
-
             else:
                 # Avoid division by zero
                 increment = job.data_scanned_progress / \
@@ -252,8 +251,11 @@ def simulate_io_elastic_pool(
     io_bandwidth: int,
     memory_bandwidth: int,
     buffer_jobs: deque,
+    cpu_jobs: deque,
+    finished_jobs: deque,
     job_memory_tiers: Dict[int, str],
-    second_range: float
+    second_range: float,
+    events: List[Event]
 ):
     """
     Simulates I/O operations in an elastic pool, allocating bandwidth based on memory tier and core count.
@@ -272,7 +274,8 @@ def simulate_io_elastic_pool(
     """
     # Define bandwidth for each memory tier
     scan_bandwidth = {"DRAM": memory_bandwidth,
-                      "SSD": int(650 * cpu_cores / 4), "S3": 10000}
+                      "SSD": io_bandwidth, "S3": 1000}
+
 
     # ----------------------------
     # Phase 1: Memory Tier Assignment
@@ -323,16 +326,50 @@ def simulate_io_elastic_pool(
 
         # Update job progress based on allocated bandwidth
         if job.data_scanned_progress != 0:
-            if job.data_scanned_progress > per_job_bandwidth * second_range:
-                job.data_scanned_progress -= per_job_bandwidth * second_range
-                job.io_time += second_range
+            if per_job_bandwidth == 0:
+                continue  # Decide how to handle, e.g., skip or assign default bandwidth
+            elapsed_time = (current_second - max(job.start_timestamp, current_second - second_range))
+            if 1000 * job.data_scanned_progress > per_job_bandwidth * elapsed_time:
+                job.data_scanned_progress -= per_job_bandwidth * elapsed_time/1000
+                
+                # print("IO Appended job", job.job_id, "now has", job.data_scanned_progress)
+
+                job.io_time += elapsed_time / 1000
+
+                remaining_bytes = job.data_scanned_progress  # bytes
+                # if per_job_bandwidth is in bytes per second, first convert to bytes/ms
+                bandwidth_per_ms = per_job_bandwidth / 1000.0
+                # compute how many ms are needed, always rounding up
+                finish_delta_ms = math.ceil(remaining_bytes / bandwidth_per_ms)
+                finish_time_ms = current_second + finish_delta_ms
+                # print("IO Appended job", job.job_id, "expected to finish at", finish_time_ms, "bytes: ", remaining_bytes, "bandwidth", bandwidth_per_ms)
+                if job.scheduled:
+                    # Already in the heap—always push an updated estimate
+                    job.next_time = finish_time_ms
+                    heapq.heappush(events, Event(
+                        finish_time_ms, next_event_counter(), job, "io_done"))
+                else:
+                    # No completion event yet—only schedule if it beats whatever is next
+                    next_evt_time = peek_next_event_time(events)
+                    # print("io", new_finish, next_evt_time)
+                    if finish_time_ms <= next_evt_time:
+                        job.scheduled = True
+                        job.next_time = finish_time_ms
+                        heapq.heappush(events, Event(
+                            finish_time_ms, next_event_counter(), job, "io_done"))
+
             else:
-                job.io_time += job.data_scanned_progress / per_job_bandwidth
+                # Avoid division by zero
+                increment = job.data_scanned_progress / \
+                    per_job_bandwidth if per_job_bandwidth != 0 else 0
+                job.io_time += increment
                 job.data_scanned_progress = 0
+                # print("IO Appended job", job.job_id, "now has", job.data_scanned_progress, "and finished at ", current_second)
         else:
             # Move job to buffer once scanning is complete
             io_jobs.remove(job)
-            buffer_jobs.append(job)
+            if job not in buffer_jobs and job not in cpu_jobs:
+                finished_jobs.append(job)
 
 
 def simulate_io_qaas(
@@ -449,45 +486,6 @@ def assign_cores_to_jobs(
         alloc[i] += 1
 
     return alloc
-
-
-def assign_cores_to_jobs_autoscaling(
-    cpu_jobs: List[Job],
-    num_cores: int,
-    current_second: float
-) -> List[int]:
-    """
-    Assigns cores to CPU-bound jobs based on their CPU time requirements for autoscaling.
-
-    Args:
-        cpu_jobs (List[Job]): List of CPU-bound jobs.
-        num_cores (int): Total available CPU cores.
-        time_limit (float): Time limit for execution.
-
-    Returns:
-        List[int]: Number of cores allocated to each job.
-    """
-    required_cores = [math.ceil(job.cpu_time / (time_limit * 1000))
-                      for job in cpu_jobs]
-    total_required_cores = sum(required_cores)
-
-    initial_cores_per_job = num_cores // len(cpu_jobs) if cpu_jobs else 0
-    core_allocation = [min(1, initial_cores_per_job) for _ in cpu_jobs]
-
-    if num_cores > len(cpu_jobs):
-        num_cores_remaining = num_cores - len(cpu_jobs)
-
-        for i, job_cores in enumerate(required_cores):
-            allocated_cores = (
-                job_cores / total_required_cores) * num_cores_remaining
-            core_allocation[i] += math.floor(allocated_cores)
-
-    else:
-        for i in range(num_cores):
-            core_allocation[i] += 1
-
-    return core_allocation
-
 
 def simulate_cpu_nodes(
     current_second: float,
@@ -693,9 +691,12 @@ def simulate_cpu_autoscaling(
     finished_jobs: List[Job],
     shuffle_jobs: List[Job],
     io_jobs: deque,
+    waiting_jobs: deque,
     shuffle: Dict[int, int],
     memory: List[float],
-    second_range: float
+    second_range: float,
+    events: List[Event],
+    parallelizable_portion: float = 0.9
 ) -> int:
     """
     Simulates CPU operations with autoscaling, allocating cores to jobs and handling shuffles.
@@ -719,8 +720,7 @@ def simulate_cpu_autoscaling(
     # Assign cores to jobs
     num_jobs = len(cpu_jobs)
     if num_jobs > 0:
-        core_allocation = assign_cores_to_jobs_autoscaling(
-            cpu_jobs, cpu_cores, 1)
+        core_allocation = assign_cores_to_jobs(cpu_jobs, shuffle, cpu_cores, current_second)
 
         for job, cores_assigned in zip(cpu_jobs, core_allocation):
             if cores_assigned > 4 and job.data_shuffle != 0:
@@ -732,11 +732,10 @@ def simulate_cpu_autoscaling(
         # Estimate completion time for each job and update progress
         for job, cores_assigned in zip(list(cpu_jobs), core_allocation):
             speedup_factor = 1
+            elapsed_time = (current_second - max(job.start_timestamp, current_second - second_range))
             if cores_assigned != 0:
                 if cores_assigned > 4:  # Configurable threshold
                     # Calculate the proportion of the program that is parallelizable
-                    parallelizable_portion = 0.9
-
                     shuffle[job.job_id] = 1
 
                     # Calculate the speedup factor according to Amdahl's Law
@@ -755,31 +754,74 @@ def simulate_cpu_autoscaling(
                 if shuffle[job.job_id] == 1 and job.data_shuffle != 0:
                     # Shuffling Logic
                     per_job_bandwidth = cores_assigned * 50
-                    if job.data_shuffle > per_job_bandwidth * second_range:
-                        job.data_shuffle -= per_job_bandwidth * second_range
-                        job.shuffle_time += second_range
+                    if 1000 * job.data_shuffle > per_job_bandwidth * elapsed_time:
+                        job.data_shuffle -= per_job_bandwidth * elapsed_time / 1000
+                        job.shuffle_time += second_range / 1000
+                        
+                        # print("Shuffle Appended job", job.job_id, "now has", job.data_shuffle)
+                        bandwidth_per_ms = per_job_bandwidth / 1000.0
+                        finish_delta_ms = math.ceil(
+                            job.data_shuffle / bandwidth_per_ms)
+                        finish_time_ms = current_second + finish_delta_ms
+                        
+                        if job.scheduled:
+                            # Already in the heap—always push an updated estimate
+                            job.next_time = finish_time_ms
+                            heapq.heappush(events, Event(
+                                finish_time_ms, next_event_counter(), job, "shuffle_done"))
+                        else:
+                            # No completion event yet—only schedule if it beats whatever is next
+                            next_evt_time = peek_next_event_time(events)
+                            # print(events)
+                            if finish_time_ms <= next_evt_time:
+                                job.scheduled = True
+                                job.next_time = finish_time_ms
+                                heapq.heappush(events, Event(
+                                    finish_time_ms, next_event_counter(), job, "shuffle_done"))
+                        
                     else:
-                        job.shuffle_time += job.data_shuffle / \
-                            (per_job_bandwidth * second_range)
+                        time_increment = job.data_shuffle / \
+                            per_job_bandwidth if per_job_bandwidth != 0 else 0
+                        job.shuffle_time += time_increment
+                        # print("Shuffle Appended job", job.job_id, "finished at", current_second)
                         job.data_shuffle = 0
-                        shuffle[job.job_id] = 0
-                        shuffle_jobs.remove(job)
-                else:
-                    # Deduct CPU seconds from CPU time
-                    if (completion_time > second_range and job.cpu_time_progress > cores_assigned * 1000 * second_range * speedup_factor):
-                        job.processing_time += second_range
-                        job.cpu_time_progress -= cores_assigned * 1000 * speedup_factor * second_range
+                if job.data_shuffle == 0 or shuffle[job.job_id] == 0: # IF YOU WANT TO SPLIT THEM LOGICALLY UNCOMMENT THIS - BUT THEN FIX THE ALLOCATION ISSUE
+                    # Deduct CPU seconds based on cores allocated
+                    required_cpu_time = min(cores_assigned, 4) * speedup_factor * elapsed_time
+                    if job.cpu_time_progress > required_cpu_time:
+                        job.cpu_time_progress -= required_cpu_time
+                        job.processing_time += elapsed_time / 1000
+                        
+                        # print("CPU Appended job", job.job_id, "now has", job.cpu_time_progress)
+                        remaining_ms = job.cpu_time_progress
+                        finish_delta_ms = math.ceil(
+                            remaining_ms / (min(cores_assigned, 4) * speedup_factor))
+                        finish_time_ms = current_second + finish_delta_ms
+                                                
+                        # print("CPU Appended job", job.job_id, "expected to finish at", finish_time_ms,"cpu: ", remaining_ms, "cores: cores_assigned", cores_assigned ,"finish at", finish_delta_ms)
+
+                        # print(current_second, required_cpu_time, job.cpu_time_progress, cores_assigned, job.job_id)
+                        if job.scheduled:
+                            # Already in the heap—always push an updated estimate
+                            job.next_time = finish_time_ms
+                            heapq.heappush(events, Event(
+                                finish_time_ms, next_event_counter(), job, "cpu_done"))
+                        else:
+                            # No completion event yet—only schedule if it beats whatever is next
+                            next_evt_time = peek_next_event_time(events)
+                            # print(events)
+                            if finish_time_ms <= next_evt_time:
+                                job.scheduled = True
+                                job.next_time = finish_time_ms
+                                heapq.heappush(events, Event(
+                                    finish_time_ms, next_event_counter(), job, "cpu_done"))
                     else:
                         job.processing_time += completion_time
-                        cpu_jobs.remove(job)
-                        memory[0] -= job.data_scanned / 4
-                        job.end_timestamp = current_second * 1000
-                        job.query_exec_time = job.io_time + job.processing_time + job.shuffle_time
-                        job.query_exec_time_queueing = job.query_exec_time + \
-                            job.queueing_delay + job.buffer_delay
-                        finished_jobs.append(job)
+                        job.cpu_time_progress = 0
+                        job_finalization(job, memory, cpu_jobs, shuffle_jobs,
+                                            finished_jobs, io_jobs, waiting_jobs, current_second)
             else:
-                job.processing_time += second_range
+                job.processing_time += elapsed_time / 1000
         return sum(core_allocation)
     else:
         return 0
