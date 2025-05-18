@@ -276,7 +276,7 @@ class Autoscaler:
                     previous_length = self.history[0]
                     current_length = self.history[-1]
                     # Scale out if current length is at least 25% greater than 10 measurements ago
-                    if current_length >= 1.5 * previous_length:
+                    if current_length >= 1.5 * previous_length or (len(cpu_jobs) > 0 and cpu_cores == 0):
                         self.scale_out(4)
                         heapq.heappush(events, Event(current_second + self.cold_start_limit, next_event_counter(), None, "scaling_check"))
                     # Scale in if current length is at least 25% less than 10 measurements ago and nodes > base_n

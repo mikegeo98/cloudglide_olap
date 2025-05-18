@@ -6,7 +6,7 @@
         "vpu_values": [1],
         "scaling_values": [1],
         "cold_starts_values": [180],
-        "hit_rate_values": [0.6],
+        "hit_rate_values": [1],
         "instance_values": [0],
         "arrival_rate_values": [0.1],
         "network_bandwidth_values": [10],
@@ -75,7 +75,7 @@
         "dataset_values": [4]
     },
     "scaling_algorithms": {
-        "architecture_values": [2],
+        "architecture_values": [3],
         "scheduling_values": [1],
         "nodes_values": [4],
         "vpu_values": [16],
@@ -86,7 +86,7 @@
         "arrival_rate_values": [0.1],
         "network_bandwidth_values": [5],
         "io_bandwidth_values": [1],
-        "memory_bandwidth_values": [1],
+        "memory_bandwidth_values": [40000],
         "dataset_values": [4] 
     },
     "cold_starts": {

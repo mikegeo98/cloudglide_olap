@@ -8,7 +8,7 @@ from math import ceil
 import random
 import time
 from collections import deque, namedtuple
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import numpy as np
 import pandas as pd
 from cloudglide.cost_model import (
@@ -19,12 +19,9 @@ from cloudglide.cost_model import (
 from cloudglide.scaling_model import Autoscaler
 from cloudglide.scheduling_model import io_scheduler, cpu_scheduler
 from cloudglide.query_processing_model import (
-    simulate_cpu_autoscaling,
     simulate_cpu_qaas,
-    simulate_cpu_nodes,
-    simulate_io_qaas,
-    simulate_io_cached,
-    simulate_io_elastic_pool
+    simulate_cpu,
+    simulate_io,
 )
 from cloudglide.visual_model import write_to_csv
 from cloudglide.job import Job
@@ -87,6 +84,39 @@ def handle_interrupt(
     # Clear Shuffled Jobs
     shuffled_jobs.clear()
 
+def load_jobs_from_csv(path: str, max_rows: Optional[int] = None) -> Tuple[deque[Job], float]:
+    jobs: list[Job] = []
+    costq = 0.0
+
+    try:
+        with open(path, 'r') as file:
+            reader = csv.DictReader(file)
+            for i, row in enumerate(reader):
+                if max_rows is not None and i >= max_rows:
+                    break
+
+                job = Job(
+                    job_id=i,
+                    database_id=int(row['database_id']),
+                    query_id=int(row['query_id']),
+                    start=float(row['start']),
+                    cpu_time=float(row['cpu_time']),
+                    data_scanned=float(row['data_scanned']),
+                    scale_factor=float(row['scale_factor'])
+                )
+                jobs.append(job)
+                costq += job.data_scanned
+
+    except FileNotFoundError:
+        logging.error(f"Dataset file '{path}' not found.")
+        return deque(), 0.0
+    except Exception as e:
+        logging.error(f"Error reading dataset file '{path}': {e}")
+        return deque(), 0.0
+
+    # sort once, then wrap in deque for O(1) pops from the left
+    jobs.sort(key=lambda job: job.start)
+    return deque(jobs), costq
 
 def schedule_jobs(
     architecture: int,
@@ -125,7 +155,6 @@ def schedule_jobs(
 
     # Initialize memory tracking
     memory = [0]  # Using list for mutable reference
-
     # Initialize cost monitoring variables
     money, vpu_charge, slots, slots_charge, base_n, base_cores, interrupt = 0.0, 0.0, 0, 0.0, 0, 0, 0
     spot = 0  # Assuming a flag for spot instances; adjust as needed
@@ -143,7 +172,7 @@ def schedule_jobs(
         base_n = nodes
         sec_money = redshift_persecond_cost(cpu_cores / nodes)
     elif architecture == 2:
-        base_cores = cpu_cores
+        cpu_cores_per_node = 4
         sec_money = redshift_persecond_cost(cpu_cores / nodes)
     else:
         sec_money = COST_PER_SECOND_REDSHIFT  # Adjust based on architecture
@@ -162,33 +191,8 @@ def schedule_jobs(
     interrupt_countdown = 0
 
     # Initialize Jobs from CSV
-    jobs = []
-    costq = 0.0
-    try:
-        with open(simulation_params[0], 'r') as file:
-            reader = csv.DictReader(file)
-            for i, row in enumerate(reader):
-                job = Job(
-                    job_id=i,
-                    database_id=int(row['database_id']),
-                    query_id=int(row['query_id']),
-                    start=float(row['start']),
-                    cpu_time=float(row['cpu_time']),
-                    data_scanned=float(row['data_scanned']),
-                    scale_factor=float(row['scale_factor'])
-                )
-                jobs.append(job)
-                costq += job.data_scanned
-    except FileNotFoundError:
-        logging.error(f"Dataset file '{simulation_params[0]}' not found.")
-        return [], [], 0.0, 0.0, 0.0
-    except Exception as e:
-        logging.error(f"Error reading dataset file '{simulation_params[0]}': {e}")
-        return [], [], 0.0, 0.0, 0.0
-
-    # Sort jobs by start time
-    jobs.sort(key=lambda job: job.start)
-
+    jobs, costq = load_jobs_from_csv(simulation_params[0], max_rows=3000000)
+    
     events = []
     # Seed arrival events
     for job in jobs:
@@ -198,26 +202,42 @@ def schedule_jobs(
     current_second = 0.0  # in seconds, rounded to 0.1s increments
     previous_second = 0.0
     # Main simulation loop
-    while events or jobs or io_jobs or waiting_jobs or buffer_jobs or cpu_jobs:
-       
-        if len(events) > 0:
-            ev = heapq.heappop(events)
-            
-            raw = ev.time
-            
-            previous_second = current_second
-            
-            # Round *up* to the next tenth:
-            current_second = math.ceil(raw * 10) / 10
+    
+    cnt = 0
+    while events:
+        ev = heapq.heappop(events)
+        now     = ev.time
+        job_ev  = ev.job
+        phase   = ev.etype
 
-            if(previous_second == current_second and current_second!=0.0):
+        # drop stale job events
+        if job_ev and phase != "arrival":
+            if phase == "io_done" and now != job.next_io_done:
                 continue
+            elif phase == "shuffle_done" and now != job.next_shuffle_done:
+                continue
+            elif phase == "cpu_done" and now != job.next_cpu_done:
+                continue
+        if phase == "arrival":
+            arriving = ev.job
+            # I/O side:
+            waiting_jobs.append(arriving)
+            # CPU side:
+            buffer_jobs.append(arriving)
+        
+        previous_second = current_second
+        
+        # Round *up* to the next tenth:
+        current_second = math.ceil(now * 10) / 10
 
-            second_range = current_second - previous_second
-            # time.sleep(0.5)
-            # print("We start at", current_second, "with", len(io_jobs), len(cpu_jobs))
+        if current_second == previous_second and current_second != 0.0:
+            continue
+        second_range = current_second - previous_second
 
-        # Calculate per-second cost
+        # time.sleep(0.5)
+        # print("We start at", current_second, "with", len(io_jobs), len(cpu_jobs))
+
+        # 2) Charge cost
         if architecture != 3 or capacity_pricing:
             money, vpu_charge, slots_charge = cost_calculator(
                 second_range, architecture, money, nodes, base_n,
@@ -225,67 +245,6 @@ def schedule_jobs(
                 spot, interrupt, slots, slots_charge
             )
 
-        # Schedule I/O jobs
-        io_scheduler(
-            scheduling, architecture, current_second,
-            jobs, waiting_jobs, io_jobs,
-            cpu_cores, second_range, num_queues, job_queues
-        )
-
-        # Schedule CPU jobs
-        cpu_scheduler(
-            scheduling, architecture, current_second,
-            jobs, buffer_jobs, cpu_jobs,
-            cpu_cores, memory, second_range
-        )
-
-        # print("After scheduling we have", len(io_jobs), len(cpu_jobs), cpu_cores)
-
-        # Logging information about running jobs if required
-        # if simulation_params[3] == 1:
-        #     df.loc[df["query_id"] == 13, "cpu_time"] *= 0.8(
-        #         f"Time {current_second}: I/O Jobs: {len(io_jobs)}, CPU Jobs: {len(cpu_jobs)}, "
-        #         f"Buffer Jobs: {len(buffer_jobs)}, Waiting Jobs: {len(waiting_jobs)}"
-        #     )
-
-        # Simulate I/O operations based on architecture
-        if architecture < 2:
-            simulate_io_cached(
-                current_second, hit_rate, nodes, io_jobs, io_bandwidth,
-                memory_bandwidth, network_bandwidth, buffer_jobs, cpu_jobs,
-                finished_jobs, job_memory_tiers, dram_nodes,
-                dram_job_counts, second_range, events
-            )
-        elif architecture == 2:
-            simulate_io_elastic_pool(
-                current_second, hit_rate, base_cores, cpu_cores, io_jobs,
-                io_bandwidth, memory_bandwidth, buffer_jobs, cpu_jobs,
-                finished_jobs, {}, second_range, events
-            )
-        else:
-            simulate_io_qaas(io_jobs, network_bandwidth,
-                             buffer_jobs, second_range, cpu_jobs, finished_jobs)
-
-        # Simulate CPU operations based on architecture
-        if architecture < 2:
-            simulate_cpu_nodes(
-                current_second, cpu_jobs, cpu_cores,
-                cpu_cores_per_node, network_bandwidth,
-                finished_jobs, shuffled_jobs, io_jobs,
-                waiting_jobs, {}, memory, second_range, events
-            )
-        elif architecture == 2:
-            simulate_cpu_autoscaling(
-                current_second, cpu_jobs, base_cores,
-                cpu_cores, network_bandwidth,
-                finished_jobs, shuffled_jobs,
-                io_jobs, waiting_jobs, {}, memory, second_range, events
-            )
-        else:
-            slots = simulate_cpu_qaas(
-                current_second, cpu_jobs, cpu_cores, network_bandwidth,
-                finished_jobs, shuffled_jobs, waiting_jobs, io_jobs, {}, memory, second_range
-            )
         # Check and perform autoscaling if applicable
         if architecture == 1 and autoscaler:
             nodes, cpu_cores, io_bandwidth, memoryz = autoscaler.autoscaling_dw(
@@ -303,6 +262,47 @@ def schedule_jobs(
             if current_second % 60000 == 0:
                 scale_observe.append(vpu)
 
+
+        # Schedule I/O jobs        
+        io_scheduler(
+            scheduling, architecture, current_second, second_range,
+            jobs, waiting_jobs, io_jobs,
+            cpu_cores, phase
+        )
+
+        # Schedule CPU jobs
+        cpu_scheduler(
+            scheduling, architecture, current_second,
+            jobs, buffer_jobs, cpu_jobs,
+            cpu_cores, memory, second_range, phase
+        )
+
+        # print("After scheduling we have", len(io_jobs), len(cpu_jobs), cpu_cores)
+        # if cnt % 50000 == 1:
+        # print("We start at", current_second, "with", len(io_jobs), len(cpu_jobs))
+        # Logging information about running jobs if required
+        # if simulation_params[3] == 1:
+        #     df.loc[df["query_id"] == 13, "cpu_time"] *= 0.8(
+        #         f"Time {current_second}: I/O Jobs: {len(io_jobs)}, CPU Jobs: {len(cpu_jobs)}, "
+        #         f"Buffer Jobs: {len(buffer_jobs)}, Waiting Jobs: {len(waiting_jobs)}"
+        #     )
+
+        # Simulate I/O operations based on architecture
+        simulate_io(
+            current_second, hit_rate, nodes, io_jobs, io_bandwidth,
+            memory_bandwidth, phase, buffer_jobs, cpu_jobs,
+            finished_jobs, job_memory_tiers, dram_nodes,
+            dram_job_counts, second_range, events, architecture
+        )
+            
+        # Simulate CPU operations based on architecture
+        slots = simulate_cpu(
+                current_second, cpu_jobs, phase,
+                cpu_cores, cpu_cores_per_node, network_bandwidth,
+                finished_jobs, shuffled_jobs,
+                io_jobs, waiting_jobs, {}, memory, second_range, events, architecture
+            )
+
         # Track memory usage every 60 seconds
         if current_second % 60000 == 0:
             if memoryz != 0:
@@ -317,9 +317,8 @@ def schedule_jobs(
         elif interrupt_countdown > 0:
             interrupt_countdown -= 1
 
-
         # Sleep to simulate real-time passage if needed
-        time.sleep(simulation_params[1])
+        # time.sleep(simulation_params[1])
     
     # Write finished jobs to CSV
     finished_jobs.sort(key=lambda job: job.start)
@@ -386,5 +385,5 @@ def schedule_jobs(
           f"Median Query (with queueing) Latency: {metrics['median_query_wq_latency']}")
     print(f"95th Percentile Query Latency: {metrics['percentile_95_query_latency']} | "
           f"95th Percentile Query (with queueing) Latency: {metrics['percentile_95_query_wq_latency']}")
-
+    print(cnt)
     return scale_observe, mem_track, metrics['average_query_latency'], metrics['average_query_wq_latency'], total_price, metrics['median_query_latency'], metrics['percentile_95_query_latency']
