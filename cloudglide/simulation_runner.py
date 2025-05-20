@@ -4,7 +4,10 @@ import itertools
 import logging
 from collections import deque
 from dataclasses import dataclass, field
+import os
 import pstats
+
+import psutil
 from cloudglide.execution_model import schedule_jobs
 from typing import List, Tuple
 import numpy as np
@@ -296,14 +299,23 @@ def run_simulation(
             f"Network Bandwidth: {nb}, I/O Bandwidth: {iob}, Memory Bandwidth: {mb}, Dataset: {ds_idx}"
         )
         
-        pr = cProfile.Profile()
-        pr.enable()
+        # pr = cProfile.Profile()
+        # pr.enable()
+        
+        proc = psutil.Process(os.getpid())
 
+        before = proc.memory_info().rss
+        
         scales, mems, lat, lat_queue, money, med, ninetyfive = schedule_jobs(
             arch, exec_params, sim_params, output_file_path)
-        pr.disable()
-        ps = pstats.Stats(pr).sort_stats('tottime')
-        ps.print_stats(20)
+        
+        after  = proc.memory_info().rss
+        print(f"RSS before: {before/1024**2:.1f} MiB")
+        print(f"RSS after:  {after/1024**2:.1f} MiB")
+        print(f"Delta:      {(after-before)/1024**2:.1f} MiB")
+        # pr.disable()
+        # ps = pstats.Stats(pr).sort_stats('tottime')
+        # ps.print_stats(20)
 
         scalings.append(scales)
         memories.append(mems)

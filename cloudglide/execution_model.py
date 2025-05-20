@@ -191,7 +191,7 @@ def schedule_jobs(
     interrupt_countdown = 0
 
     # Initialize Jobs from CSV
-    jobs, costq = load_jobs_from_csv(simulation_params[0], max_rows=3000000)
+    jobs, costq = load_jobs_from_csv(simulation_params[0], max_rows=100)
     
     events = []
     # Seed arrival events
