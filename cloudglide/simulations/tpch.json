@@ -29,7 +29,7 @@
         "memory_bandwidth_values": [1],
         "dataset_values": [998]
     },
-     "concurrency test": {
+     "concurrency_test": {
         "architecture_values": [0],
         "scheduling_values": [1],
         "nodes_values": [16],

@@ -482,7 +482,6 @@ def simulate_cpu(
         cpu_jobs.remove(job)
     return sum(core_allocation) if architecture == 2 else 0
 
-
 def job_finalization(
     job: Job,
     memory: List[float],
@@ -491,10 +490,13 @@ def job_finalization(
     finished_jobs: List[Job],
     io_jobs: List[Job],
     waiting_jobs: List[Job],
-    current_second: float
+    current_second: float,
+    delta: float = 0.3,
+    p: float = 4.0
 ):
     """
-    Finalizes a job after completion, removes it from active queues, adjusts memory and shuffle status.
+    Finalizes a job after completion, removes it from active queues, adjusts memory and shuffle status,
+    and computes all five execution-time estimators.
 
     Args:
         job (Job): The job to finalize.
@@ -502,17 +504,50 @@ def job_finalization(
         cpu_jobs (List[Job]): List of CPU-bound jobs.
         shuffle_jobs (List[Job]): List of jobs currently in shuffle.
         finished_jobs (List[Job]): List of finished jobs.
+        io_jobs (List[Job]): List of I/O-bound jobs.
+        waiting_jobs (List[Job]): List of waiting jobs.
         current_second (float): Current simulation second.
+        δ (float): Fixed offset to account for parsing/coordination overhead.
+        p (float): Exponent for the power-mean estimator.
 
     Returns:
         None
     """
-    memory[0] -= job.data_scanned / 4  # Adjust memory usage
+    # 1. bookkeeping
+    memory[0] -= job.data_scanned / 4
     job.end_timestamp = current_second
-    job.query_exec_time = max(job.io_time, job.processing_time)
+
+    # 2. extract per-phase times
+    T_io      = job.io_time
+    T_cpu     = job.processing_time
+    T_shuffle = job.shuffle_time
+
+    # 3. basic sum and cpu-only
+    T_sum = T_io + T_cpu + T_shuffle
+    T_cpu_only = T_cpu
+
+    # 4. max + offset
+    T_max_offset = max(T_io, T_cpu, T_shuffle) + delta
+
+    # 5. power-mean
+    T_pm = (T_io**p + T_cpu**p + T_shuffle**p)**(1.0/p)
+
+    # 6. multi-wave: sum of per-wave maxes
+    #    assumes job.io_phases, job.cpu_phases, job.shuffle_phases are lists of equal length
+    # k = 3
+    # waves = []
+    T_mw = (
+            max(0.8 * T_cpu, 0.2 * T_shuffle) +
+            T_io +
+            max(0.1 * T_cpu, 0.6 * T_shuffle) +
+            max(0.1 * T_cpu, 0.2 * T_shuffle)
+        )
+
+    job.query_exec_time = T_max_offset
     job.query_exec_time_queueing = job.query_exec_time + \
         max(job.queueing_delay, job.buffer_delay)
-    # cpu_jobs.remove(job)
+
+    # 8. remove from active lists, mark finished
     if job in shuffle_jobs:
         shuffle_jobs.remove(job)
     if job not in waiting_jobs and job not in io_jobs:
