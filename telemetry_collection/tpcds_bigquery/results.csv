@@ -1,0 +1,5 @@
+query_file,job_id,state,elapsed_s,slot_s,cpu_s,bytes_processed_mb,bytes_billed_mb,shuffle_mb
+query10.sql,bqjob_r4f390e866b04796d_00000197a203ef27_1,DONE,1,140.601,7672.662209510803,7673.0
+query11.sql,bqjob_r6ab7c63af3ec57c7_00000197a2041f37_1,DONE,12,2096.025,16048.668158531189,16049.0
+query12.sql,bqjob_r490a4b4433c643ca_00000197a2047caa_1,DONE,1,273.144,2229.490411758423,2230.0
+query13.sql,bqjob_r50758bc1d5eeb17d_00000197a204aa7e_1,DONE,3,194.055,29445.246209144592,29446.0

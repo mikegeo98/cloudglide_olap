@@ -1,5 +1,7 @@
 # query_processing_model2.py
+from cloudglide.event import Event, next_event_counter
 
+import heapq
 import random
 import math
 from typing import List, Tuple, Dict
@@ -10,7 +12,8 @@ from cloudglide.job import Job
 import logging
 
 # Configure logging for better debugging and traceability
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 def assign_memory_tier(hit_rate: float) -> str:
@@ -43,6 +46,10 @@ def assign_memory_tier(hit_rate: float) -> str:
         rand_num -= prob
 
     return "S3"  # Default to S3 if no match
+
+
+def peek_next_event_time(events):
+    return events[0].time if events else float("inf")
 
 
 def update_dram_nodes(
@@ -81,22 +88,23 @@ def update_dram_nodes(
 
     return dram_nodes, dram_job_counts
 
-
-def simulate_io_cached(
+def simulate_io(
     current_second: float,
     hit_rate: float,
     num_nodes: int,
     io_jobs: deque,
     io_bandwidth: int,
     memory_bandwidth: int,
-    network_bandwidth: int,
+    phase: int,
     buffer_jobs: deque,
     cpu_jobs: deque,
     finished_jobs: deque,
     job_memory_tiers: Dict[int, str],
     dram_nodes: List[List[Job]],
     dram_job_counts: List[int],
-    second_range: float
+    second_range: float,
+    events: List[Event],
+    architecture: int
 ):
     """
     Simulates I/O operations with cached memory tiers (DRAM, SSD, S3), allocating bandwidth per job.
@@ -114,227 +122,125 @@ def simulate_io_cached(
         dram_nodes (List[List[Job]]): List of DRAM nodes with their jobs.
         dram_job_counts (List[int]): Number of jobs per DRAM node.
         second_range (float): Simulation time step.
+        - architecture < 2: cached tiers (DRAM, SSD, S3) with DRAM nodes
+        - architecture == 2: elastic pool, no DRAM nodes
     """
-    # Define bandwidth for each memory tier -
-    scan_bandwidth = {"DRAM": memory_bandwidth, "SSD": io_bandwidth, "S3": 1000}
+    # only run on arrival or io_done or scale_check
+    if phase not in ("arrival", "io_done", "scale_check"):
+        return
+    # also no‐op if no io_jobs
+    if not io_jobs:
+        return
 
-    # Update DRAM nodes for scaling
-    dram_nodes, dram_job_counts = update_dram_nodes(dram_nodes, dram_job_counts, num_nodes)
-
+    
+    
     # ----------------------------
-    # Phase 1: Memory Tier Assignment
+    # Case: QaaS
     # ----------------------------
-    new_jobs = []  # List to store jobs and their memory tiers for Phase 2
+    if architecture == 3:
+        for job in list(io_jobs):
+            elapsed = current_second - max(job.start_timestamp, current_second - second_range)
+            cores = assign_cores_to_job_qaas(job)
+            bw = cores * 150  # bytes per second
 
-    for job in list(io_jobs):  # Create a static snapshot for safe iteration
-        job_key = job.job_id
-
-        # Assign memory tier if not already assigned
-        if job_key not in job_memory_tiers:
-            assigned_tier = assign_memory_tier(hit_rate)  # Assuming parameters as per original code
-            job_memory_tiers[job_key] = assigned_tier
-
-            if assigned_tier == "DRAM":
-                node_index = job_key % num_nodes  # Simple distribution based on job_id
-                dram_nodes[node_index].append(job)
-                dram_job_counts[node_index] += 1
-
-        # Collect job and its memory tier for Phase 2
-        memory_tier = job_memory_tiers[job_key]
-        new_jobs.append((job, memory_tier))
-
-    # ----------------------------
-    # Phase 2: Bandwidth Allocation and Processing
-    # ----------------------------
-    for job, memory_tier in new_jobs:
-        job_key = job.job_id
-
-        # Retrieve bandwidth for the memory tier
-        bandwidth = scan_bandwidth.get(memory_tier, 0)
-        if bandwidth == 0:
-            continue  # Skip processing if bandwidth is undefined
-
-        # Calculate effective bandwidth based on memory tier and skew
-        if memory_tier == "DRAM":
-            skew = 0  # Adjust skew as needed
-            effective_bandwidth = bandwidth * (1 - skew)
-            node_index = job_key % num_nodes  # Consistent with assignment
-            num_jobs = dram_job_counts[node_index]
-        elif memory_tier == "SSD":
-            skew = 0  # Adjust skew as needed
-            effective_bandwidth = bandwidth * (1 - skew)
-            # Correctly reference each job's job_id
-            num_jobs = len([j for j in io_jobs if job_memory_tiers.get(j.job_id) == memory_tier])
-        else:
-            effective_bandwidth = bandwidth
-            num_jobs = len([j for j in io_jobs if job_memory_tiers.get(j.job_id) == memory_tier])
-
-        # Allocate bandwidth per job
-        if num_jobs > 0:
-            per_job_bandwidth = effective_bandwidth / num_jobs
-        else:
-            per_job_bandwidth = 0
-
-        # Process job's data scanned progress
-        if job.data_scanned_progress != 0:
-            if per_job_bandwidth == 0:
-                continue  # Decide how to handle, e.g., skip or assign default bandwidth
-            if job.data_scanned_progress > per_job_bandwidth * second_range:
-                job.data_scanned_progress -= per_job_bandwidth * second_range
-                job.io_time += second_range
-            else:
-                # Avoid division by zero
-                increment = job.data_scanned_progress / per_job_bandwidth if per_job_bandwidth != 0 else 0
-                job.io_time += increment
-                job.data_scanned_progress = 0
-        else:
-            # Remove job if data scan is complete
-            if memory_tier == "DRAM":
-                node_index = job_key % num_nodes
-                if job in dram_nodes[node_index]:
-                    dram_nodes[node_index].remove(job)
-                    dram_job_counts[node_index] -= 1
-                else:
-                    logging.warning(f"Job ID {job_key} not found in DRAM Node {node_index} during removal.")
-
-            io_jobs.remove(job)
-            if job not in buffer_jobs and job not in cpu_jobs:
-                finished_jobs.append(job)
-
-
-def simulate_io_elastic_pool(
-    current_second: float,
-    hit_rate: float,
-    base_cores: int,
-    cpu_cores: int,
-    io_jobs: deque,
-    io_bandwidth: int,
-    memory_bandwidth: int,
-    buffer_jobs: deque,
-    job_memory_tiers: Dict[int, str],
-    second_range: float
-):
-    """
-    Simulates I/O operations in an elastic pool, allocating bandwidth based on memory tier and core count.
-
-    Args:
-        current_second (float): Current simulation second.
-        hit_rate (float): Hit rate for memory tier assignment.
-        base_cores (int): Base number of CPU cores.
-        cpu_cores (int): Total number of CPU cores.
-        io_jobs (deque): Queue of I/O jobs.
-        io_bandwidth (int): I/O bandwidth available.
-        memory_bandwidth (int): Memory bandwidth available.
-        buffer_jobs (deque): Buffer queue for jobs.
-        job_memory_tiers (Dict[int, str]): Mapping of job_id to memory tier.
-        second_range (float): Simulation time step.
-    """
-    # Define bandwidth for each memory tier
-    scan_bandwidth = {"DRAM": memory_bandwidth, "SSD": int(650 * cpu_cores / 4), "S3": 10000}
-
-    # ----------------------------
-    # Phase 1: Memory Tier Assignment
-    # ----------------------------
-    new_jobs = []  # List to store jobs and their memory tiers for Phase 2
-
-    for job in list(io_jobs):
-        job_key = job.job_id
-
-        # Assign memory tier if not already assigned
-        if job_key not in job_memory_tiers:
-            job_memory_tiers[job_key] = assign_memory_tier(hit_rate)
-
-        # Collect job and its memory tier for Phase 2
-        memory_tier = job_memory_tiers[job_key]
-        new_jobs.append((job, memory_tier))
-
-    # ----------------------------
-    # Phase 2: Bandwidth Allocation and Processing
-    # ----------------------------
-    for job, memory_tier in new_jobs:
-        job_key = job.job_id
-
-        # Retrieve bandwidth for the memory tier
-        bandwidth = scan_bandwidth.get(memory_tier, 0)
-        if bandwidth == 0:
-            continue  # Skip processing if bandwidth is undefined
-
-        # Calculate bandwidth per job for DRAM and SSD
-        if memory_tier != "S3":
-            skew = 0
-            effective_bandwidth = bandwidth * (1 - skew)
-            num = len([j for j in io_jobs if job_memory_tiers[j.job_id] == memory_tier])
-            if num > 0:
-                per_job_bandwidth = effective_bandwidth / num
-            else:
-                per_job_bandwidth = 0  # Handle appropriately
-        else:
-            # For S3, consider all jobs in the same tier
-            effective_bandwidth = bandwidth
-            num = len([j for j in io_jobs if job_memory_tiers[j.job_id] == memory_tier])
-            if num > 0:
-                per_job_bandwidth = effective_bandwidth / num
-            else:
-                per_job_bandwidth = 0  # Handle appropriately
-
-        # Update job progress based on allocated bandwidth
-        if job.data_scanned_progress != 0:
-            if job.data_scanned_progress > per_job_bandwidth * second_range:
-                job.data_scanned_progress -= per_job_bandwidth * second_range
-                job.io_time += second_range
-            else:
-                job.io_time += job.data_scanned_progress / per_job_bandwidth
-                job.data_scanned_progress = 0
-        else:
-            # Move job to buffer once scanning is complete
-            io_jobs.remove(job)
-            buffer_jobs.append(job)
-
-
-def simulate_io_qaas(
-    io_jobs: deque,
-    network_bandwidth: int,
-    buffer_jobs: deque,
-    second_range: float,
-    cpu_jobs: deque,
-    finished_jobs: deque
-):
-    """
-    Simulates I/O operations for a Qaas (Query as a Service) system, allocating bandwidth based on required cores.
-
-    Args:
-        io_jobs (deque): Queue of I/O jobs.
-        network_bandwidth (int): Network bandwidth available.
-        buffer_jobs (deque): Buffer queue for jobs.
-        second_range (float): Simulation time step.
-    """
-    if io_jobs:
-        for job in list(io_jobs):  # Convert deque to list for safe iteration
-            # Assign the required number of cores to the job and calculate the per-job bandwidth
-            required_cores = assign_cores_to_job_qaas(job)
-            per_job_bandwidth = required_cores * 150  # Bandwidth per job based on cores
-
-            # If there is data left to scan
-            if job.data_scanned_progress != 0:
-                # Process data based on bandwidth and time range
-                if job.data_scanned_progress > per_job_bandwidth * second_range:
-                    job.data_scanned_progress -= per_job_bandwidth * second_range
-                    job.io_time += second_range
-                else:
-                    job.io_time += job.data_scanned_progress / per_job_bandwidth
-                    job.data_scanned_progress = 0
-            else:
+            if job.data_scanned_progress == 0:
                 # Remove job from I/O queue and move it to the buffer once scanning is done
                 io_jobs.remove(job)
                 if job not in buffer_jobs and job not in cpu_jobs:
                     finished_jobs.append(job)
-                # buffer_jobs.append(job)
+                continue
 
+            # amount processable this tick
+            processed = bw * elapsed
+            if job.data_scanned_progress > processed:
+                job.data_scanned_progress -= processed
+                job.io_time += elapsed / 1000
+            else:
+                # compute exact time to finish remaining bytes
+                rem = job.data_scanned_progress
+                finish_delta = rem / (bw)
+                # schedule completion event
+                schedule_event(job, current_second + finish_delta, 'io_done', events)
+                # account for I/O time until finish
+                job.io_time += finish_delta
+                job.data_scanned_progress = 0
+        return
+    
+    # ----------------------------
+    # Phase 1: Memory Tier Assignment
+    # ----------------------------
+    new_jobs = []
+    for job in list(io_jobs):
+        jid = job.job_id
+        if jid not in job_memory_tiers:
+            tier = assign_memory_tier(hit_rate)
+            job_memory_tiers[jid] = tier
+            if architecture < 2 and tier == 'DRAM':
+                idx = jid % num_nodes
+                job.dram_node_index = idx
+                dram_nodes[idx].append(job)
+                dram_job_counts[idx] += 1
+        new_jobs.append((job, job_memory_tiers[jid]))
+
+    # Pre-calc DRAM node distribution if cached
+    if architecture < 2:
+        dram_nodes, dram_job_counts = update_dram_nodes(
+            dram_nodes, dram_job_counts, num_nodes)
+        
+    # ----------------------------
+    # Phase 2: Bandwidth Allocation and Processing
+    # ----------------------------
+    # Phase 2: Bandwidth Allocation and Processing
+    for job, tier in new_jobs:
+        # Choose bandwidth source
+        scan_bw = {'DRAM': memory_bandwidth, 'SSD': io_bandwidth, 'S3': 1000}
+        bw = scan_bw.get(tier, 0)
+        if bw == 0:
+            continue
+        # Compute number of peers
+        if tier == 'DRAM' and architecture < 2:
+            node_idx = job.dram_node_index
+            peers = dram_job_counts[node_idx]
+            eff_bw = bw
+        else:
+            eff_bw = bw
+            peers = len([j for j in io_jobs if job_memory_tiers[j.job_id] == tier])
+        per_job_bw = eff_bw / peers if peers > 0 else 0
+        
+        # Progress logic
+        if job.data_scanned_progress == 0:
+            continue
+        elapsed = current_second - max(job.start_timestamp,
+                                       current_second - second_range)
+        # work in bytes per second, progress in bytes
+        needed = job.data_scanned_progress * 1000
+        avail = per_job_bw * elapsed
+        if needed > avail:
+            job.data_scanned_progress -= avail / 1000
+            job.io_time += elapsed / 1000
+            # schedule finish
+            rem = job.data_scanned_progress
+            finish_delta_ms = math.ceil(rem / (per_job_bw / 1000 or float('inf')))
+            finish_time = current_second + finish_delta_ms
+            schedule_event(job, finish_time, "io_done", events)
+        else:
+            job.io_time += job.data_scanned_progress / per_job_bw if per_job_bw else 0
+            job.data_scanned_progress = 0
+            # finalize removal
+            if architecture < 2 and tier == 'DRAM':
+                idx = job.dram_node_index
+                dram_nodes[idx].remove(job)
+                dram_job_counts[idx] -= 1
+            io_jobs.remove(job)
+            if job not in buffer_jobs and job not in cpu_jobs:
+                finished_jobs.append(job)
+                
 
 def assign_cores_to_jobs(
     cpu_jobs: List[Job],
+    shuffle,
     num_cores: int,
-    time_limit: float
+    current_second
 ) -> List[int]:
     """
     Assigns cores to CPU-bound jobs based on their CPU time requirements.
@@ -347,70 +253,95 @@ def assign_cores_to_jobs(
     Returns:
         List[int]: Number of cores allocated to each job.
     """
-    required_cores = [math.ceil(job.cpu_time / (time_limit * 1000)) for job in cpu_jobs]
-    total_required_cores = sum(required_cores)
+    time_limit = 10
+    
+    n = len(cpu_jobs)
+    allocations = [0] * n
 
-    initial_cores_per_job = num_cores // len(cpu_jobs) if cpu_jobs else 0
-    core_allocation = [min(1, initial_cores_per_job) for _ in cpu_jobs]
+    # 1) Identify which jobs have actually started
+    eligible = [
+        i for i, job in enumerate(cpu_jobs)
+        if (current_second - job.start_timestamp > 0)
+        and (
+            # either it has no shuffle left…
+            job.data_shuffle == 0
+            # …or, if it’s in the shuffle dict, its value is 0
+            or shuffle.get(job.job_id, 0) == 0
+        )
+    ]
+    n = len(eligible)
+    if n == 0:
+        return allocations  # no one gets cores
 
-    if num_cores > len(cpu_jobs):
-        num_cores_remaining = num_cores - len(cpu_jobs)
+        # If fewer cores than jobs, give one core to the first num_cores jobs
+    if num_cores <= n:
+        alloc = [1 if i < num_cores else 0 for i in range(n)]
+        return alloc
 
-        for i, job_cores in enumerate(required_cores):
-            allocated_cores = (job_cores / total_required_cores) * num_cores_remaining
-            core_allocation[i] += math.floor(allocated_cores)
+    # Everyone gets at least one core
+    alloc = [1] * n
+    extras = num_cores - n
 
-        # Distribute any remaining cores
-        remaining_cores = num_cores_remaining - sum(math.floor((job_cores / total_required_cores) * num_cores_remaining) for job_cores in required_cores)
-        for i in range(remaining_cores):
-            core_allocation[i % len(core_allocation)] += 1
+    # Compute each job's 'weight' based on required CPU time
+    required = [math.ceil(job.cpu_time / (time_limit * 1000)) for job in cpu_jobs]
+    total_req = sum(required)
+    if total_req == 0:
+        # If no job requires CPU time (edge-case), spread extras evenly
+        for i in range(extras):
+            alloc[i % n] += 1
+        return alloc
 
-    else:
-        for i in range(num_cores):
-            core_allocation[i] += 1
+    # Compute each job's ideal extra share (as float)
+    ideal = [req / total_req * extras for req in required]
 
-    return core_allocation
+    # Take the floor of each share, track remainders
+    floors     = [math.floor(x) for x in ideal]
+    remainders = [ideal[i] - floors[i] for i in range(n)]
 
+    # Add the floored extras
+    for i in range(n):
+        alloc[i] += floors[i]
 
-def assign_cores_to_jobs_autoscaling(
-    cpu_jobs: List[Job],
-    num_cores: int,
-    time_limit: float
-) -> List[int]:
+    used = sum(floors)
+    left = extras - used  # how many cores remain to distribute
+
+    # Distribute the remaining cores to jobs with largest remainder
+    for i in sorted(range(n), key=lambda i: remainders[i], reverse=True)[:left]:
+        alloc[i] += 1
+
+    return alloc
+
+def schedule_event(job: Job, timestamp: float, event_type: str, events: List[Event]):
     """
-    Assigns cores to CPU-bound jobs based on their CPU time requirements for autoscaling.
-
-    Args:
-        cpu_jobs (List[Job]): List of CPU-bound jobs.
-        num_cores (int): Total available CPU cores.
-        time_limit (float): Time limit for execution.
-
-    Returns:
-        List[int]: Number of cores allocated to each job.
+    Helper to push or reschedule job events, using flat next_* slots
+    instead of a dict lookup for max speed.
     """
-    required_cores = [math.ceil(job.cpu_time / (time_limit * 1000)) for job in cpu_jobs]
-    total_required_cores = sum(required_cores)
+    # choose the correct slot on the Job
+    if event_type == "io_done":
+        slot_name = "next_io_done"
+    elif event_type == "shuffle_done":
+        slot_name = "next_shuffle_done"
+    else:  # "cpu_done"
+        slot_name = "next_cpu_done"
 
-    initial_cores_per_job = num_cores // len(cpu_jobs) if cpu_jobs else 0
-    core_allocation = [min(1, initial_cores_per_job) for _ in cpu_jobs]
-
-    if num_cores > len(cpu_jobs):
-        num_cores_remaining = num_cores - len(cpu_jobs)
-
-        for i, job_cores in enumerate(required_cores):
-            allocated_cores = (job_cores / total_required_cores) * num_cores_remaining
-            core_allocation[i] += math.floor(allocated_cores)
-
+    if job.scheduled:
+        # simply overwrite that slot
+        setattr(job, slot_name, timestamp)
+        heapq.heappush(events, Event(timestamp, next_event_counter(), job, event_type))
     else:
-        for i in range(num_cores):
-            core_allocation[i] += 1
+        # only schedule the very next event
+        nxt = peek_next_event_time(events)
+        if timestamp <= nxt:
+            job.scheduled = True
+            # initialize your slot as well
+            setattr(job, slot_name, timestamp)
+            heapq.heappush(events, Event(timestamp, next_event_counter(), job, event_type))
 
-    return core_allocation
 
-
-def simulate_cpu_nodes(
+def simulate_cpu(
     current_second: float,
     cpu_jobs: List[Job],
+    phase: int,
     cpu_cores: int,
     cpu_cores_per_node: int,
     network_bandwidth: int,
@@ -421,7 +352,9 @@ def simulate_cpu_nodes(
     shuffle: Dict[int, int],
     memory: List[float],
     second_range: float,
-    parallelizable_portion: float = 0.9
+    events: List[Event],
+    architecture,
+    parallelizable_portion: float = 0.9,
 ):
     """
     Simulates CPU operations, allocating cores to jobs and handling shuffles.
@@ -443,63 +376,111 @@ def simulate_cpu_nodes(
     Returns:
         None
     """
+    
+    if phase not in ("arrival","cpu_done","shuffle_done","scale_check"):
+        return 0
+
+    # and no-op if there’s nothing to do
+    if not cpu_jobs:
+        return 0
+
+    if architecture >=3:
+        return simulate_cpu_qaas(current_second, cpu_jobs, network_bandwidth,
+                finished_jobs, shuffle_jobs, waiting_jobs, io_jobs, {}, memory, second_range, events)
+    
+    # Determine per-node core threshold
+    per_node = cpu_cores_per_node
+    
     # Assign cores to jobs
-    num_jobs = len(list(cpu_jobs))
+    num_jobs = len((cpu_jobs))
+    if num_jobs == 0:
+        return 0
+    
+    core_allocation = assign_cores_to_jobs(cpu_jobs, shuffle, cpu_cores, current_second)
+    
+    # Update shuffle_jobs list based on threshold
+    for job, cores_assigned in zip(cpu_jobs, core_allocation):
+        if cores_assigned > per_node and job.data_shuffle > 0:
+            if job not in shuffle_jobs:
+                shuffle_jobs.append(job)
+        elif job in shuffle_jobs and job.data_shuffle <= 0:
+            shuffle_jobs.remove(job)
 
-    if num_jobs > 0:
-        # Assign cores based on job requirements
-        core_allocation = assign_cores_to_jobs(cpu_jobs, cpu_cores, 10)
+    shuffle_count = sum(
+        1 for job, cores_assigned in zip(cpu_jobs, core_allocation)
+        if cores_assigned > per_node and job.data_shuffle > 0
+    )
 
-        # Iterate through jobs and their assigned cores
-        for job, cores_assigned in zip(cpu_jobs.copy(), core_allocation):
-            # Check for shuffling conditions
-            if cores_assigned > cpu_cores_per_node and job.data_shuffle > 0:
-                if job not in shuffle_jobs:
-                    shuffle_jobs.append(job)
-            if job in shuffle_jobs and job.data_shuffle <= 0:
-                shuffle_jobs.remove(job)
+    # Process each job
+    to_remove = []
+    for job, cores_assigned in zip(cpu_jobs, core_allocation):
+        elapsed_time = (current_second - max(job.start_timestamp, current_second - second_range))
+        # Default speedup
+        if cores_assigned == 0:
+            job.processing_time += elapsed_time / 1000
+            continue
 
-        # Process each job
-        for job, cores_assigned in zip(cpu_jobs.copy(), core_allocation):
-            speedup_factor = 1.0
-            if cores_assigned != 0:
-                if cores_assigned > cpu_cores_per_node:
-                    # Speedup calculation using Amdahl's Law (parameterized parallel portion)
-                    speedup_factor = 1 / ((1 - parallelizable_portion) + (parallelizable_portion / (cores_assigned / cpu_cores_per_node)))
-                    shuffle[job.job_id] = 1
-                else:
-                    # No speedup
-                    shuffle[job.job_id] = 0
-
-                # If job is in shuffle phase
-                if shuffle[job.job_id] == 1 and job.data_shuffle > 0 and job in shuffle_jobs:
-                    # Network bandwidth allocation per job
-                    num_shuffle_jobs = len(shuffle_jobs) 
-                    per_job_bandwidth = network_bandwidth / num_shuffle_jobs if num_shuffle_jobs > 0 else 0
-
-                    if job.data_shuffle > per_job_bandwidth * second_range:
-                        job.data_shuffle -= per_job_bandwidth * second_range
-                        job.shuffle_time += second_range
-                    else:
-                        time_increment = job.data_shuffle / per_job_bandwidth if per_job_bandwidth != 0 else 0
-                        job.shuffle_time += time_increment
-                        job.data_shuffle = 0
-                else:
-                    # Deduct CPU seconds based on cores allocated
-                    required_cpu_time = min(cores_assigned, cpu_cores_per_node) * 1000 * speedup_factor * second_range
-                    if job.cpu_time_progress > required_cpu_time:
-                        job.cpu_time_progress -= required_cpu_time
-                        job.processing_time += second_range
-                    else:
-                        # Finalize job execution if completed
-                        time_used = job.cpu_time_progress / (min(cores_assigned, cpu_cores_per_node) * 1000 * speedup_factor) if (min(cores_assigned, cpu_cores_per_node) * 1000 * speedup_factor) > 0 else 0
-                        job.processing_time += time_used
-                        job.cpu_time_progress = 0
-                        job_finalization(job, memory, cpu_jobs, shuffle_jobs, finished_jobs, io_jobs, waiting_jobs, current_second)
+        # Amdahl's Law if parallelizable
+        if cores_assigned > per_node:
+            shuffle[job.job_id] = 1
+            speedup_factor = 1 / ((1 - parallelizable_portion)
+                                  + (parallelizable_portion / (cores_assigned / per_node)))
+            # Node involvement fraction
+            if architecture < 2:
+                nodes_involved = math.ceil(cores_assigned / cpu_cores_per_node) / (cpu_cores / cpu_cores_per_node)
             else:
-                # If no cores are assigned, increment CPU time but no progress
-                job.processing_time += second_range
+                nodes_involved = 1  # not used in arch2 timing calc
+        else:
+            shuffle[job.job_id] = 0
+            speedup_factor = 1
+            nodes_involved = 1
+        
+        # Shuffle phase
+        if shuffle[job.job_id] == 1 and job.data_shuffle > 0:
+            
+            if architecture == 2:
+                per_job_bw = 50 * cores_assigned
+            else:
+                per_job_bw = network_bandwidth / shuffle_count if shuffle_count > 0 else 0
+            # compute shuffle progress
+            total_needed = job.data_shuffle * 1000
+            available = per_job_bw * elapsed_time
+            if total_needed > available:
+                job.data_shuffle -= available / 1000
+                job.shuffle_time += elapsed_time / 1000
+                finish_delta = math.ceil(job.data_shuffle / (per_job_bw / 1000 or float('inf')))
+                finish_time = current_second + finish_delta
+                schedule_event(job, finish_time, "shuffle_done", events)
+            else:
+                job.shuffle_time += job.data_shuffle / per_job_bw if per_job_bw else 0
+                job.data_shuffle = 0
+        
+        # CPU phase if shuffle done - IF YOU WANT TO SPLIT THEM LOGICALLY UNCOMMENT THIS - BUT THEN FIX THE ALLOCATION ISSUE
+        if job.data_shuffle == 0 or shuffle[job.job_id] == 0:
+            work = min(cores_assigned, per_node) * speedup_factor * elapsed_time
+            
+            denom = (min(cores_assigned, per_node)
+                     * (nodes_involved if architecture < 2 else 1)
+                     * speedup_factor * 1000)
 
+            if job.cpu_time_progress > work:
+                job.cpu_time_progress -= work
+                job.processing_time += elapsed_time / 1000
+                # Estimate finish
+                finish_delta = math.ceil(job.cpu_time_progress / (min(cores_assigned, per_node) * nodes_involved * speedup_factor))
+                finish_time = current_second + finish_delta
+                schedule_event(job, finish_time, "cpu_done", events)
+            else:
+                # finalize
+                time_used = job.cpu_time_progress / denom if denom else 0
+                job.processing_time += time_used
+                job.cpu_time_progress = 0
+                to_remove.append(job)
+                job_finalization(job, memory, cpu_jobs, shuffle_jobs,
+                                 finished_jobs, io_jobs, waiting_jobs, current_second)
+    for job in to_remove:
+        cpu_jobs.remove(job)
+    return sum(core_allocation) if architecture == 2 else 0
 
 def job_finalization(
     job: Job,
@@ -509,10 +490,13 @@ def job_finalization(
     finished_jobs: List[Job],
     io_jobs: List[Job],
     waiting_jobs: List[Job],
-    current_second: float
+    current_second: float,
+    delta: float = 0.3,
+    p: float = 4.0
 ):
     """
-    Finalizes a job after completion, removes it from active queues, adjusts memory and shuffle status.
+    Finalizes a job after completion, removes it from active queues, adjusts memory and shuffle status,
+    and computes all five execution-time estimators.
 
     Args:
         job (Job): The job to finalize.
@@ -520,114 +504,54 @@ def job_finalization(
         cpu_jobs (List[Job]): List of CPU-bound jobs.
         shuffle_jobs (List[Job]): List of jobs currently in shuffle.
         finished_jobs (List[Job]): List of finished jobs.
+        io_jobs (List[Job]): List of I/O-bound jobs.
+        waiting_jobs (List[Job]): List of waiting jobs.
         current_second (float): Current simulation second.
+        δ (float): Fixed offset to account for parsing/coordination overhead.
+        p (float): Exponent for the power-mean estimator.
 
     Returns:
         None
     """
-    memory[0] -= job.data_scanned / 4  # Adjust memory usage
-    job.end_timestamp = current_second * 1000
-    job.query_exec_time = max(job.io_time, job.processing_time) 
-    job.query_exec_time_queueing = job.query_exec_time + max(job.queueing_delay, job.buffer_delay)
-    cpu_jobs.remove(job)
+    # 1. bookkeeping
+    memory[0] -= job.data_scanned / 4
+    job.end_timestamp = current_second
+
+    # 2. extract per-phase times
+    T_io      = job.io_time
+    T_cpu     = job.processing_time
+    T_shuffle = job.shuffle_time
+
+    # 3. basic sum and cpu-only
+    T_sum = T_io + T_cpu + T_shuffle
+    T_cpu_only = T_cpu
+
+    # 4. max + offset
+    T_max_offset = max(T_io, T_cpu, T_shuffle) + delta
+
+    # 5. power-mean
+    T_pm = (T_io**p + T_cpu**p + T_shuffle**p)**(1.0/p)
+
+    # 6. multi-wave: sum of per-wave maxes
+    #    assumes job.io_phases, job.cpu_phases, job.shuffle_phases are lists of equal length
+    # k = 3
+    # waves = []
+    T_mw = (
+            max(0.8 * T_cpu, 0.2 * T_shuffle) +
+            T_io +
+            max(0.1 * T_cpu, 0.6 * T_shuffle) +
+            max(0.1 * T_cpu, 0.2 * T_shuffle)
+        )
+
+    job.query_exec_time = T_max_offset
+    job.query_exec_time_queueing = job.query_exec_time + \
+        max(job.queueing_delay, job.buffer_delay)
+
+    # 8. remove from active lists, mark finished
     if job in shuffle_jobs:
         shuffle_jobs.remove(job)
     if job not in waiting_jobs and job not in io_jobs:
         finished_jobs.append(job)
-
-
-def simulate_cpu_autoscaling(
-    current_second: float,
-    cpu_jobs: List[Job],
-    base_cores: int,
-    cpu_cores: int,
-    network_bandwidth: int,
-    finished_jobs: List[Job],
-    shuffle_jobs: List[Job],
-    io_jobs: deque,
-    shuffle: Dict[int, int],
-    memory: List[float],
-    second_range: float
-) -> int:
-    """
-    Simulates CPU operations with autoscaling, allocating cores to jobs and handling shuffles.
-
-    Args:
-        current_second (float): Current simulation second.
-        cpu_jobs (List[Job]): List of CPU-bound jobs.
-        base_cores (int): Base number of CPU cores.
-        cpu_cores (int): Total number of CPU cores.
-        network_bandwidth (int): Network bandwidth available.
-        finished_jobs (List[Job]): List of finished jobs.
-        shuffle_jobs (List[Job]): List of jobs currently in shuffle.
-        io_jobs (deque): Queue of I/O jobs.
-        shuffle (Dict[int, int]): Mapping of job_id to shuffle status.
-        memory (List[float]): Current memory usage.
-        second_range (float): Simulation time step.
-
-    Returns:
-        int: Total cores allocated.
-    """
-    # Assign cores to jobs
-    num_jobs = len(cpu_jobs)
-    if num_jobs > 0:
-        core_allocation = assign_cores_to_jobs_autoscaling(cpu_jobs, cpu_cores, 1)
-
-        for job, cores_assigned in zip(cpu_jobs, core_allocation):
-            if cores_assigned > 4 and job.data_shuffle != 0:
-                if job not in shuffle_jobs and job.data_shuffle != 0:
-                    shuffle_jobs.append(job)
-            if job in shuffle_jobs and job.data_shuffle == 0:
-                shuffle_jobs.remove(job)
-
-        # Estimate completion time for each job and update progress
-        for job, cores_assigned in zip(list(cpu_jobs), core_allocation):
-            speedup_factor = 1
-            if cores_assigned != 0:
-                if cores_assigned > 4:  # Configurable threshold
-                    # Calculate the proportion of the program that is parallelizable
-                    parallelizable_portion = 0.9
-
-                    shuffle[job.job_id] = 1
-
-                    # Calculate the speedup factor according to Amdahl's Law
-                    speedup_factor = 1 / ((1 - parallelizable_portion) + (parallelizable_portion / (cores_assigned / 4)))
-
-                    # Adjust completion time using the speedup factor
-                    completion_time = job.cpu_time_progress / ((4 * 1000) * speedup_factor)
-                else:
-                    completion_time = job.cpu_time_progress / (cores_assigned * 1000)
-                    shuffle[job.job_id] = 0
-
-                if shuffle[job.job_id] == 1 and job.data_shuffle != 0:
-                    # Shuffling Logic
-                    per_job_bandwidth = cores_assigned * 50 
-                    if job.data_shuffle > per_job_bandwidth * second_range:
-                        job.data_shuffle -= per_job_bandwidth * second_range
-                        job.shuffle_time += second_range
-                    else:
-                        job.shuffle_time += job.data_shuffle / (per_job_bandwidth * second_range)
-                        job.data_shuffle = 0
-                        shuffle[job.job_id] = 0
-                        shuffle_jobs.remove(job)
-                else:
-                    # Deduct CPU seconds from CPU time
-                    if (completion_time > second_range and job.cpu_time_progress > cores_assigned * 1000 * second_range * speedup_factor):
-                        job.processing_time += second_range
-                        job.cpu_time_progress -= cores_assigned * 1000 * speedup_factor * second_range
-                    else:
-                        job.processing_time += completion_time
-                        cpu_jobs.remove(job)
-                        memory[0] -= job.data_scanned / 4
-                        job.end_timestamp = current_second * 1000
-                        job.query_exec_time = job.io_time + job.processing_time + job.shuffle_time
-                        job.query_exec_time_queueing = job.query_exec_time + job.queueing_delay + job.buffer_delay
-                        finished_jobs.append(job)
-            else:
-                job.processing_time += second_range
-        return sum(core_allocation)
-    else:
-        return 0
 
 
 def assign_cores_to_job_qaas(job: Job, time_limit: float = 2) -> int:
@@ -646,10 +570,12 @@ def assign_cores_to_job_qaas(job: Job, time_limit: float = 2) -> int:
         target_execution_time = 18 * 1000  # 18 seconds in milliseconds
     elif job.cpu_time > 4000000:
         # Linearly interpolate the target execution time between 6 and 18 seconds
-        target_execution_time = (6 + (12 * (job.cpu_time - 4000000) / (6000000 - 4000000))) * 1000
+        target_execution_time = (
+            6 + (12 * (job.cpu_time - 4000000) / (6000000 - 4000000))) * 1000
     elif job.cpu_time > 2000000:
         # Linearly interpolate the target execution time between 2 and 6 seconds
-        target_execution_time = (2 + (4 * (job.cpu_time - 2000000) / (4000000 - 2000000))) * 1000
+        target_execution_time = (
+            2 + (4 * (job.cpu_time - 2000000) / (4000000 - 2000000))) * 1000
     else:
         target_execution_time = time_limit * 1000  # Default time limit in milliseconds
 
@@ -681,7 +607,6 @@ def assign_cores_to_jobs_qaas(cpu_jobs: List[Job], time_limit: float) -> List[in
 def simulate_cpu_qaas(
     current_second: float,
     cpu_jobs: List[Job],
-    cpu_cores: int,
     network_bandwidth: int,
     finished_jobs: List[Job],
     shuffle_jobs: List[Job],
@@ -689,7 +614,8 @@ def simulate_cpu_qaas(
     io_jobs: deque,
     shuffle: Dict[int, int],
     memory: List[float],
-    second_range: float
+    second_range: float,
+    events
 ) -> int:
     """
     Simulates CPU operations for a QAas (Query as a Service) system, allocating cores to jobs and handling shuffles.
@@ -711,62 +637,74 @@ def simulate_cpu_qaas(
     """
     # Assign cores to jobs
     num_jobs = len(cpu_jobs)
-    if num_jobs > 0:
-        core_allocation = assign_cores_to_jobs_qaas(cpu_jobs, 4)
+    if num_jobs == 0:
+        return 0
+    
+    # 1) assign cores (using your QA-specific allocator)
+    core_allocation = assign_cores_to_jobs_qaas(cpu_jobs, 4)
 
-        for job, cores_assigned in zip(cpu_jobs, core_allocation):
-            if cores_assigned > 4 and job.data_shuffle != 0:
-                if job not in shuffle_jobs and job.data_shuffle != 0:
-                    shuffle_jobs.append(job)
-            if job in shuffle_jobs and job.data_shuffle == 0:
+     # 2) update shuffle_jobs set
+    for job, cores in zip(cpu_jobs, core_allocation):
+        if cores > 4 and job.data_shuffle > 0 and job not in shuffle_jobs:
+            shuffle_jobs.append(job)
+        if job in shuffle_jobs and job.data_shuffle == 0:
+            shuffle_jobs.remove(job)
+
+    # 3) process each job
+    for job, cores in zip(list(cpu_jobs), core_allocation):
+        elapsed = current_second - max(job.start_timestamp,
+                                       current_second - second_range)
+
+        # no cores → just accrue queueing/processing delay
+        if cores == 0:
+            job.processing_time += elapsed
+            continue
+
+        # parallel fraction
+        p = 0.9
+        if cores > 4:
+            shuffle[job.job_id] = 1
+            speedup = 1 / ((1 - p) + (p / (cores / 4)))
+        else:
+            shuffle[job.job_id] = 0
+            speedup = 1
+
+        # SHUFFLE PHASE
+        if shuffle[job.job_id] == 1 and job.data_shuffle > 0:
+            bw = cores * 50  # bytes/sec per job
+            transferred = bw * elapsed
+            if job.data_shuffle > transferred:
+                job.data_shuffle -= transferred
+                job.shuffle_time += elapsed / 1000
+                # estimate finish in seconds
+                delta = math.ceil(job.data_shuffle / (bw / 1000 or float('inf')))
+                # print("Status at: ", current_second, "for ", job.job_id, ": Needs ", delta, "with shuffle: ",job.data_shuffle, "and bw:" , bw)
+                schedule_event(job, current_second + delta, "shuffle_done", events)
+            else:
+                job.shuffle_time += job.data_shuffle / bw if bw else 0
+                job.data_shuffle = 0
+                shuffle[job.job_id] = 0
                 shuffle_jobs.remove(job)
 
-        # Estimate completion time for each job and update progress
-        for job, cores_assigned in zip(list(cpu_jobs), core_allocation):
-            speedup_factor = 1
-            if cores_assigned != 0:
-                if cores_assigned > 4:  # Configurable threshold
-                    # Calculate the proportion of the program that is parallelizable
-                    parallelizable_portion = 0.9
-
-                    shuffle[job.job_id] = 1
-
-                    # Calculate the speedup factor according to Amdahl's Law
-                    speedup_factor = 1 / ((1 - parallelizable_portion) + (parallelizable_portion / (cores_assigned / 4)))
-
-                    # Adjust completion time using the speedup factor
-                    completion_time = job.cpu_time_progress / ((4 * 1000) * speedup_factor)
-                else:
-                    completion_time = job.cpu_time_progress / (cores_assigned * 1000)
-                    shuffle[job.job_id] = 0
-
-                if shuffle[job.job_id] == 1 and job.data_shuffle != 0:
-                    # Shuffling Logic
-                    per_job_bandwidth = cores_assigned * 50
-                    if job.data_shuffle > per_job_bandwidth * second_range:
-                        job.data_shuffle -= per_job_bandwidth * second_range
-                        job.shuffle_time += second_range
-                    else:
-                        job.shuffle_time += job.data_shuffle / (per_job_bandwidth * second_range)
-                        job.data_shuffle = 0
-                        shuffle[job.job_id] = 0
-                        shuffle_jobs.remove(job)
-                else:
-                    # Deduct CPU seconds from CPU time
-                    if (completion_time > second_range and job.cpu_time_progress > cores_assigned * 1000 * second_range * speedup_factor):
-                        job.processing_time += second_range
-                        job.cpu_time_progress -= cores_assigned * 1000 * speedup_factor * second_range
-                    else:
-                        job.processing_time += completion_time
-                        cpu_jobs.remove(job)
-                        memory[0] -= job.data_scanned / 4
-                        job.end_timestamp = current_second * 1000
-                        job.query_exec_time = job.io_time + job.processing_time + job.shuffle_time
-                        job.query_exec_time_queueing = job.query_exec_time + job.queueing_delay + job.buffer_delay
-                        if job not in waiting_jobs and job not in io_jobs:
-                            finished_jobs.append(job)
+        # CPU PHASE (once shuffle is done)
+        if job.data_shuffle == 0 or shuffle[job.job_id] == 0:
+            # how much CPU-seconds we can do this tick
+            work = cores * speedup * elapsed
+            if job.cpu_time_progress > work:
+                job.cpu_time_progress -= work
+                job.processing_time += elapsed / 1000
+                # schedule cpu_done
+                remaining = job.cpu_time_progress
+                # 4 cores base → effective rate = 4 * speedup per second
+                rate = min(cores, 4) * speedup
+                delta = math.ceil(remaining / (rate or float('inf'))) 
+                # print("Status at: ", current_second, "for ", job.job_id, ": Needs ", delta, "with CPU time: ",job.cpu_time_progress, "and rate:" , 4*speedup, "for assgined cores: ", cores)           
+                schedule_event(job, current_second + delta, "cpu_done", events)
             else:
-                job.processing_time += second_range
-        return sum(core_allocation)
-    else:
-        return 0
+                job.processing_time += job.cpu_time_progress / (1000 *(min(cores, 4) * speedup or 1))
+                job.cpu_time_progress = 0
+                # finalize
+                job_finalization(job, memory, cpu_jobs, shuffle_jobs,
+                finished_jobs, io_jobs, waiting_jobs, current_second)
+                
+    return sum(core_allocation)

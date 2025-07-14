@@ -1,30 +1,43 @@
 # job.py
 
 from dataclasses import dataclass, field
+from typing import Dict, Optional
 
 
-@dataclass
+@dataclass(slots=True)
 class Job:
+    # Identity and input parameters
     job_id: int
     database_id: int
     query_id: int
-    start: float
-    cpu_time: float
-    data_scanned: float
-    scale_factor: float
+    start: float         # Job arrival time (ms)
+    cpu_time: float      # Total CPU time required (ms)
+    data_scanned: float  # Total data scanned (bytes)
+    scale_factor: float  # Scale factor affecting shuffle size
+
+    # Derived fields (initialized after basic init)
     data_shuffle: float = field(init=False)
+    cpu_time_progress: float = field(init=False)
+    data_scanned_progress: float = field(init=False)
+
+    # Progress and timing metrics
     start_timestamp: float = 0.0
     end_timestamp: float = 0.0
     queueing_delay: float = 0.0
     io_time: float = 0.0
     buffer_delay: float = 0.0
-    cpu_time_progress: float = field(init=False)
-    data_scanned_progress: float = field(init=False)
     shuffle_time: float = 0.0
     processing_time: float = 0.0
     query_exec_time: float = 0.0
     query_exec_time_queueing: float = 0.0
+
+    # Scheduling metadata
     priority_level: int = 0
+    scheduled: bool = field(init=False, default=False)
+    next_io_done:      float | None = field(init=False, default=None)
+    next_shuffle_done: float | None = field(init=False, default=None)
+    next_cpu_done:     float | None = field(init=False, default=None)
+    dram_node_index: Optional[int] = field(init=False, default=None)
 
     def __post_init__(self):
         self.data_shuffle = self.calculate_data_shuffle()

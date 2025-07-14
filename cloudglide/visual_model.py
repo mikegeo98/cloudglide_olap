@@ -1,6 +1,8 @@
 # visual_model.py
 
 import csv
+import io
+from typing import List
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,97 +33,46 @@ def print_info(current_second, nodes, io_jobs, waiting_jobs, cpu_jobs, jobs, buf
             f"Queued: {len(waiting_jobs)}, Buffered: {len(buffer_jobs)}, CPU: {len(cpu_jobs)}"
         )
 
-def write_to_csv(file_path: str, data: list[Job], total_price):
-    """
-    Writes a list of Job objects to a CSV file with specific field mappings and selective columns.
-    
-    Every row in the CSV will have a 'mon_cost' column, and its value will be set
-    to the same 'total_price' for all rows.
-    """
+def write_to_csv(path: str, data: List[Job], total_price: float):
     if not data:
         logging.warning("No data provided to write to CSV.")
         return
 
-    # Define a mapping of Job attributes to desired CSV column names
-    field_mapping = {
-        'query_exec_time_queueing': 'query_duration_with_queue',
-        'query_exec_time': 'query_duration',
-        'queueing_delay': 'Queueing Delay',
-        'buffer_delay': 'Buffer Delay',
-        'io_time': 'I/O',
-        'processing_time': 'CPU',
-        'shuffle_time': 'Shuffle'
-        # We do NOT map "mon_cost" here because we will forcibly add it
-    }
-
-    # Define the list of Job attributes we want to extract from each job
-    # (excluding mon_cost, since that comes from total_price)
-    desired_attributes = [
-        'job_id',
-        'query_id',
-        'database_id',
-        'start',
-        'start_timestamp',
-        'end_timestamp',
-        'queueing_delay',
-        'buffer_delay',
-        'io_time',
-        'processing_time',
-        'shuffle_time',
-        'query_exec_time_queueing',
-        'query_exec_time'
-        # 'mon_cost' is not in the Job itself; we add it below
+    # column header
+    columns = [
+        'job_id','query_id','database_id','start','start_timestamp','end_timestamp',
+        'Queueing Delay','Buffer Delay','I/O','CPU','Shuffle',
+        'query_duration_with_queue','query_duration','mon_cost'
     ]
 
-    # Define the columns we want in the CSV file (including mon_cost)
-    csv_columns = [
-        'job_id',
-        'query_id',
-        'database_id',
-        'start',
-        'start_timestamp',
-        'end_timestamp',
-        'Queueing Delay',
-        'Buffer Delay',
-        'I/O',
-        'CPU',
-        'Shuffle',
-        'query_duration_with_queue',
-        'query_duration',
-        'mon_cost'
-    ]
+    # use StringIO as an in-memory text buffer
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(columns)
 
-    converted_data = []
     for job in data:
-        # Convert the Job dataclass to a dictionary
-        job_dict = asdict(job)
+        writer.writerow([
+            job.job_id,
+            job.query_id,
+            job.database_id,
+            job.start,
+            job.start_timestamp,
+            job.end_timestamp,
+            job.queueing_delay,
+            job.buffer_delay,
+            job.io_time,
+            job.processing_time,
+            job.shuffle_time,
+            job.query_exec_time_queueing,
+            job.query_exec_time,
+            total_price,
+        ])
 
-        # Extract just the attributes we need, applying field mapping
-        filtered_job = {}
-        for attr in desired_attributes:
-            original_value = job_dict.get(attr, None)
-            # Apply field_mapping if present
-            if attr in field_mapping:
-                new_key = field_mapping[attr]
-                filtered_job[new_key] = original_value
-            else:
-                # Keep the same key name if no mapping
-                filtered_job[attr] = original_value
+    # now write *once* to disk
+    with open(path, 'w', newline='') as f:
+        f.write(buf.getvalue())
 
-        # Now inject the same mon_cost value for every row
-        filtered_job['mon_cost'] = total_price
-
-        converted_data.append(filtered_job)
-
-    try:
-        with open(file_path, 'w', newline='') as file:
-            writer = csv.DictWriter(file, fieldnames=csv_columns)
-            writer.writeheader()
-            writer.writerows(converted_data)
-
-        logging.info(f"Wrote {len(converted_data)} jobs to CSV at '{file_path}'.")
-    except Exception as e:
-        logging.error(f"Failed to write to CSV at '{file_path}': {e}")
+    logging.info(f"Wrote {len(data)} rows to {path} (buffered).")
 
 def analyze_results(filepath):
     """

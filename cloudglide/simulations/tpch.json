@@ -2,17 +2,17 @@
     "tpch_all": {
         "architecture_values": [0],
         "scheduling_values": [1],
-        "nodes_values": [1,2,4,8],
+        "nodes_values": [16],
         "vpu_values": [1],
         "scaling_values": [1],
         "cold_starts_values": [180],
         "hit_rate_values": [1],
-        "instance_values": [0],
+        "instance_values": [4],
         "arrival_rate_values": [0.1],
         "network_bandwidth_values": [10],
         "io_bandwidth_values": [1],
         "memory_bandwidth_values": [1],
-        "dataset_values": [999]
+        "dataset_values": [997]
     },
     "tpch_concurrency": {
         "architecture_values": [0],
@@ -28,5 +28,20 @@
         "io_bandwidth_values": [1],
         "memory_bandwidth_values": [1],
         "dataset_values": [998]
+    },
+     "concurrency_test": {
+        "architecture_values": [0],
+        "scheduling_values": [1],
+        "nodes_values": [16],
+        "vpu_values": [1],
+        "scaling_values": [1],
+        "cold_starts_values": [180],
+        "hit_rate_values": [1],
+        "instance_values": [1],
+        "arrival_rate_values": [0.1],
+        "network_bandwidth_values": [10],
+        "io_bandwidth_values": [1],
+        "memory_bandwidth_values": [1],
+        "dataset_values": [997]
     }
 }

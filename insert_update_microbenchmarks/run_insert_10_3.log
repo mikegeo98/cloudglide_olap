@@ -1,0 +1,52 @@
+Benchmark 'insert_10', run #3 started at Do 26. Jun 03:13:54 CEST 2025
+=== Starting benchmark 'insert_10' iteration #3 ===
+--------------------------------------------------
+Running insert_10/01_create_main_table.sql…
+CREATE TABLE
+Result:   SUCCESS
+Elapsed:  1.520164316s
+Query ID: 
+--------------------------------------------------
+Running insert_10/02_create_staging_table.sql…
+CREATE TABLE
+Result:   SUCCESS
+Elapsed:  1.324612806s
+Query ID: 
+--------------------------------------------------
+Running insert_10/03_populate_staging.sql…
+INSERT 0 838841
+Result:   SUCCESS
+Elapsed:  2.115198356s
+Query ID:  6502849
+ 6502847
+ 6502846
+ 6502845
+--------------------------------------------------
+Running insert_10/04_bulk_insert_main.sql…
+INSERT 0 838841
+Result:   SUCCESS
+Elapsed:  2.171025004s
+Query ID:  6502858
+ 6502856
+ 6502855
+ 6502854
+--------------------------------------------------
+Running insert_10/05_update_records.sql…
+UPDATE 422573
+Result:   SUCCESS
+Elapsed:  2.181215939s
+Query ID:  6502864
+--------------------------------------------------
+Running insert_10/06_delete_old_records.sql…
+DELETE 0
+Result:   SUCCESS
+Elapsed:  1.733754890s
+Query ID:  6502870
+--------------------------------------------------
+Running insert_10/07_cleanup_staging.sql…
+DROP TABLE
+DROP TABLE
+Result:   SUCCESS
+Elapsed:  2.144482282s
+Query ID: 
+=== Finished benchmark 'insert_10' iteration #3 at Do 26. Jun 03:14:19 CEST 2025 ===
