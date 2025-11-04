@@ -9,6 +9,8 @@ import numpy as np
 import matplotlib.cm as cm
 import logging
 from cloudglide.job import Job
+from collections import deque
+from typing import List, Tuple, Optional
 from dataclasses import dataclass, asdict
 
 # Configure Logging: Only console output, INFO level
@@ -17,10 +19,77 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
+def load_jobs_from_csv(path: str, max_rows: Optional[int] = None) -> Tuple[deque[Job], float]:
+
+    required_columns = {
+        "database_id", "query_id", "start",
+        "cpu_time", "data_scanned", "scale_factor"
+    }
+
+    try:
+        # Load with pandas for schema introspection
+        df = pd.read_csv(path, nrows=max_rows)
+    except FileNotFoundError:
+        logging.error(f"Dataset file '{path}' not found.")
+        return deque(), 0.0
+    except pd.errors.EmptyDataError:
+        logging.error(f"Dataset file '{path}' is empty.")
+        return deque(), 0.0
+    except Exception as e:
+        logging.error(f"Error reading dataset file '{path}': {e}")
+        return deque(), 0.0
+
+    # Validate schema
+    missing = required_columns - set(df.columns)
+    if missing:
+        logging.error(f"Dataset '{path}' missing required columns: {', '.join(missing)}")
+        return deque(), 0.0
+
+    # # Convert start time to seconds (if present)
+    # if "start" in df.columns:
+    #     df["start"] = df["start"] / 1000.0
+
+    # Drop rows with NaNs in required fields
+    df = df.dropna(subset=required_columns)
+
+    # Validate dtypes (raise warnings if conversion fails)
+    for col in ["database_id", "query_id"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
+    for col in ["start", "cpu_time", "data_scanned", "scale_factor"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # Remove invalid rows (where conversion failed)
+    invalid_rows = df[df.isnull().any(axis=1)]
+    if not invalid_rows.empty:
+        logging.warning(f"Dropped {len(invalid_rows)} invalid rows from dataset '{path}'.")
+
+    df = df.dropna().reset_index(drop=True)
+
+    # Build Job objects
+    jobs = [
+        Job(
+            job_id=i,
+            database_id=int(row.database_id),
+            query_id=int(row.query_id),
+            start=float(row.start),
+            cpu_time=float(row.cpu_time),
+            data_scanned=float(row.data_scanned),
+            scale_factor=float(row.scale_factor),
+        )
+        for i, row in df.iterrows()
+    ]
+
+    # Compute total scanned data for cost model
+    workload_data_scanned_mb = sum(job.data_scanned for job in jobs)
+
+    # Sort by arrival time
+    jobs.sort(key=lambda job: job.start)
+
+    logging.info(f"Loaded {len(jobs)} jobs from '{path}'. Total data scanned: {workload_data_scanned_mb:.2f} MB.")
+    return deque(jobs), workload_data_scanned_mb
+
 def print_info(current_second, nodes, io_jobs, waiting_jobs, cpu_jobs, jobs, buffer_jobs, memory_jobs, disk_jobs, s3_jobs):
-    """
-    Prints the current state of various job queues every 60 seconds.
-    """
+
     if current_second % 60 == 0:
         logging.info(
             f"Second {current_second} - Remaining: {len(jobs)}, I/O: {len(io_jobs)}, "
@@ -75,9 +144,7 @@ def write_to_csv(path: str, data: List[Job], total_price: float):
     logging.info(f"Wrote {len(data)} rows to {path} (buffered).")
 
 def analyze_results(filepath):
-    """
-    Analyzes the CSV results file to extract and print metrics.
-    """
+
     try:
         df = pd.read_csv(filepath)
 
@@ -116,9 +183,7 @@ def analyze_results(filepath):
         return ""
 
 def process_and_plot_csv(file_paths, num_plots=4, save_path=None):
-    """
-    Processes multiple CSV files and plots the number of active queries in minute ranges.
-    """
+
     all_range_labels = []
     all_range_counts = []
 
@@ -203,9 +268,7 @@ def process_and_plot_csv(file_paths, num_plots=4, save_path=None):
         plt.show()
 
 def process_and_plot_scaling(servers_per_minute_list, num_plots=4, save_path=None):
-    """
-    Plots the number of servers over time for multiple scaling scenarios.
-    """
+
     num_plots = len(servers_per_minute_list)
     num_columns = 2
     num_rows = (num_plots + 1) // 2
@@ -239,9 +302,7 @@ def process_and_plot_scaling(servers_per_minute_list, num_plots=4, save_path=Non
         plt.show()
 
 def plot_pareto(data):
-    """
-    Plots a Pareto front based on latency and cost data.
-    """
+
     try:
         if not data:
             logging.warning("No data provided for Pareto plot.")

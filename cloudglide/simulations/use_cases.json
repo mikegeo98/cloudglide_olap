@@ -119,6 +119,36 @@
         "memory_bandwidth_values": [1],
         "dataset_values": [3]
     },
+    "cab": {
+        "architecture_values": [0],
+        "scheduling_values": [1],
+        "nodes_values": [2,4,8,16],
+        "vpu_values": [8],
+        "scaling_values": [2],
+        "cold_starts_values": [10],
+        "hit_rate_values": [0.7],
+        "instance_values": [0],
+        "arrival_rate_values": [0.1],
+        "network_bandwidth_values": [10],
+        "io_bandwidth_values": [650],
+        "memory_bandwidth_values": [40000],
+        "dataset_values": [2]
+    },
+    "concurrency": {
+        "architecture_values": [0],
+        "scheduling_values": [1],
+        "nodes_values": [2],
+        "vpu_values": [8],
+        "scaling_values": [2],
+        "cold_starts_values": [10],
+        "hit_rate_values": [0.7],
+        "instance_values": [0],
+        "arrival_rate_values": [0.1],
+        "network_bandwidth_values": [10],
+        "io_bandwidth_values": [650],
+        "memory_bandwidth_values": [40000],
+        "dataset_values": [5,6]
+    },
     "p1_dwaas": {
         "architecture_values": [0,1],
         "scheduling_values": [1],

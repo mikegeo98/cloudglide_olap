@@ -1,0 +1,3 @@
+query_id,scale_factor,cpu_time,data_scanned,shuffle_mb
+1,15,64.97999675,17974.17,0.003
+1,16,83.2359964,25896.169,0.003

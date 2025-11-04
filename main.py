@@ -5,8 +5,6 @@ import json
 import logging
 from typing import Tuple, Dict
 from cloudglide.simulation_runner import run_simulation
-from cloudglide.config import DEFAULT_OUTPUT_PREFIX
-
 
 def load_test_cases(json_file_path: str) -> dict:
     """
@@ -51,7 +49,7 @@ def parse_arguments() -> Tuple[str, str, str, bool, str]:
     parser.add_argument('json_file_path', type=str, help='Path to the JSON configuration file.')
     parser.add_argument('--benchmark', action='store_true', help='Enable benchmarking mode.')
     parser.add_argument('--benchmark_file', type=str, default='benchmark_data.json', help='Path to the benchmark data JSON file.')
-    parser.add_argument('--output_prefix', type=str, default=DEFAULT_OUTPUT_PREFIX, help='Prefix for output files.')
+    parser.add_argument('--output_prefix', type=str, default='cloudglide/output_simulation/simulation', help='Prefix for output files.')
 
     args = parser.parse_args()
 

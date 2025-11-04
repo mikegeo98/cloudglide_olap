@@ -1,16 +1,13 @@
-import csv
-import math
-from cloudglide.event import Event, next_event_counter
 import heapq
-
+import math
 import logging
-from math import ceil
 import random
-import time
-from collections import deque, namedtuple
-from typing import List, Tuple, Optional
+from collections import deque
+from typing import List, Tuple
 import numpy as np
 import pandas as pd
+
+from cloudglide.event import Event, next_event_counter
 from cloudglide.cost_model import (
     cost_calculator,
     redshift_persecond_cost,
@@ -18,372 +15,285 @@ from cloudglide.cost_model import (
 )
 from cloudglide.scaling_model import Autoscaler
 from cloudglide.scheduling_model import io_scheduler, cpu_scheduler
-from cloudglide.query_processing_model import (
-    simulate_cpu_qaas,
-    simulate_cpu,
-    simulate_io,
-)
-from cloudglide.visual_model import write_to_csv
+from cloudglide.query_processing_model import simulate_io, simulate_cpu
+from cloudglide.visual_model import load_jobs_from_csv, write_to_csv
 from cloudglide.job import Job
-from cloudglide.config import (
-    INTERRUPT_PROBABILITY,
-    INTERRUPT_DURATION,
-    COST_PER_SECOND_REDSHIFT,
-    COST_PER_RPU_HOUR,
-    COST_PER_SLOT_HOUR,
-)
+from cloudglide.config import ArchitectureType, SimulationConfig
+from cloudglide.interrupt_model import handle_interrupt
 
+# ----------------------------
+# Initialization Helpers
+# ----------------------------
 
-def handle_interrupt(
-    io_jobs: deque,
-    cpu_jobs: deque,
-    buffer_jobs: deque,
-    waiting_jobs: deque,
-    shuffled_jobs: List[Job],
-    jobs: List[Job],
-    current_second: float
-):
-    """
-    Handle spot instance interruptions by resetting job states.
+def initialize_state(architecture: int, execution_params: List, simulation_params: List, config):
+    (
+        scheduling, scaling, nodes, cpu_cores, io_bw, max_jobs, vpu,
+        network_bw, memory_bw, total_memory_capacity_mb, cold_start, hit_rate
+    ) = execution_params
 
-    Args:
-        io_jobs (deque): Queue of I/O jobs.
-        cpu_jobs (deque): Queue of CPU jobs.
-        buffer_jobs (deque): Queue of buffer jobs.
-        waiting_jobs (deque): Queue of waiting jobs.
-        shuffled_jobs (List[Job]): List of shuffled jobs.
-        jobs (List[Job]): List of all jobs.
-        current_second (float): Current simulation second.
-    """
-    logging.warning("INTERRUPT: Spot instance interruption occurred.")
+    autoscaler = Autoscaler(cold_start) if architecture in [ArchitectureType.DWAAS_AUTOSCALING, ArchitectureType.ELASTIC_POOL] else None
+    state = {
+        "waiting_jobs": deque(),
+        "io_jobs": deque(),
+        "cpu_jobs": deque(),
+        "buffer_jobs": deque(),
+        "finished_jobs": [],
+        "shuffled_jobs": [],
+        "memory": [0],
+        "accumulated_cost_usd": 0.0,
+        "vpu_charge": 0.0,
+        "accumulated_slot_hours": 0.0,
+        "base_n": nodes,
+        "base_cores": cpu_cores,
+        "interrupt_countdown": 0,
+        "scale_observe": [],
+        "mem_track": [],
+        "dram_nodes": [[] for _ in range(nodes)],
+        "dram_job_counts": [0] * nodes,
+        "job_memory_tiers": {},
+    }
 
-    # Requeue I/O Jobs
-    while io_jobs:
-        job = io_jobs.popleft()
-        job.reset_progress(current_second)
-        jobs.append(job)
-
-    # Requeue CPU Jobs
-    while cpu_jobs:
-        job = cpu_jobs.popleft()
-        job.reset_progress(current_second)
-        jobs.append(job)
-
-    # Requeue Buffer Jobs
-    while buffer_jobs:
-        job = buffer_jobs.popleft()
-        job.reset_progress(current_second)
-        jobs.append(job)
-
-    # Requeue Waiting Jobs
-    while waiting_jobs:
-        job = waiting_jobs.popleft()
-        job.reset_progress(current_second)
-        jobs.append(job)
-
-    # Clear Shuffled Jobs
-    shuffled_jobs.clear()
-
-def load_jobs_from_csv(path: str, max_rows: Optional[int] = None) -> Tuple[deque[Job], float]:
-    jobs: list[Job] = []
-    costq = 0.0
-
-    try:
-        with open(path, 'r') as file:
-            reader = csv.DictReader(file)
-            for i, row in enumerate(reader):
-                if max_rows is not None and i >= max_rows:
-                    break
-
-                job = Job(
-                    job_id=i,
-                    database_id=int(row['database_id']),
-                    query_id=int(row['query_id']),
-                    start=float(row['start']),
-                    cpu_time=float(row['cpu_time']),
-                    data_scanned=float(row['data_scanned']),
-                    scale_factor=float(row['scale_factor'])
-                )
-                jobs.append(job)
-                costq += job.data_scanned
-
-    except FileNotFoundError:
-        logging.error(f"Dataset file '{path}' not found.")
-        return deque(), 0.0
-    except Exception as e:
-        logging.error(f"Error reading dataset file '{path}': {e}")
-        return deque(), 0.0
-
-    # sort once, then wrap in deque for O(1) pops from the left
-    jobs.sort(key=lambda job: job.start)
-    return deque(jobs), costq
-
-def schedule_jobs(
-    architecture: int,
-    execution_params: List,
-    simulation_params: List,
-    output_file: str
-) -> Tuple[List, List, float, float, float]:
-    """
-    Schedule and process jobs based on the provided parameters.
-
-    Args:
-        architecture (int): Type of architecture.
-        execution_params (List): Execution parameters.
-        simulation_params (List): Simulation parameters.
-        output_file (str): Path to the output CSV file.
-
-    Returns:
-        Tuple[List, List, float, float, float]: Scaling observations, memory tracking,
-                                                 average query latency, average query with queueing latency,
-                                                 and total price.
-    """
-    
-    # Unpack execution parameters
-    scheduling, scaling, nodes, cpu_cores, io_bandwidth, max_jobs, vpu, network_bandwidth, memory_bandwidth, memoryz, cold_start, hit_rate = execution_params
-
-    # Initialize Autoscaler if needed
-    autoscaler = Autoscaler(cold_start) if architecture in [1, 2] else None
-
-    # Initialize job queues and tracking variables
-    waiting_jobs = deque()
-    io_jobs = deque()
-    cpu_jobs = deque()
-    buffer_jobs = deque()
-    finished_jobs = []
-    shuffled_jobs = []
-
-    # Initialize memory tracking
-    memory = [0]  # Using list for mutable reference
-    # Initialize cost monitoring variables
-    money, vpu_charge, slots, slots_charge, base_n, base_cores, interrupt = 0.0, 0.0, 0, 0.0, 0, 0, 0
-    spot = 0  # Assuming a flag for spot instances; adjust as needed
-
-    # Initialize DRAM nodes
-    dram_nodes = [[] for _ in range(nodes)]
-    dram_job_counts = [0] * nodes
-
-    # Initialize job queues
-    num_queues = 5
-    job_queues = [[] for _ in range(num_queues)]
-
-    if architecture < 2:
+    # Initial cost model
+    if architecture in [ArchitectureType.DWAAS, ArchitectureType.DWAAS_AUTOSCALING]:
         cpu_cores_per_node = cpu_cores // nodes
-        base_n = nodes
-        sec_money = redshift_persecond_cost(cpu_cores / nodes)
-    elif architecture == 2:
+        cost_per_sec_usd = redshift_persecond_cost(cpu_cores / nodes)
+    elif architecture == ArchitectureType.ELASTIC_POOL:
         cpu_cores_per_node = 4
-        sec_money = redshift_persecond_cost(cpu_cores / nodes)
+        cost_per_sec_usd = redshift_persecond_cost(cpu_cores / nodes)
     else:
-        sec_money = COST_PER_SECOND_REDSHIFT  # Adjust based on architecture
+        cpu_cores_per_node = 0
+        cost_per_sec_usd = config.cost_per_second_redshift
 
-    current_second = 0.0
-    job_memory_tiers = {}
+    # Load jobs from CSV
+    jobs, workload_data_scanned_mb = load_jobs_from_csv(simulation_params[0])
 
-    # Determine capacity pricing
-    capacity_pricing = 1 if architecture == 4 else 0
-
-    # Initialize tracking lists
-    scale_observe = []
-    mem_track = []
-
-    # Initialize interrupt countdown
-    interrupt_countdown = 0
-
-    # Initialize Jobs from CSV
-    jobs, costq = load_jobs_from_csv(simulation_params[0]) # , max_rows=100
-    
-    events = []
     # Seed arrival events
-    for job in jobs:
-        heapq.heappush(events, Event(job.start, next_event_counter(), job, "arrival"))
+    events = [Event(job.start, next_event_counter(), job, "arrival") for job in jobs]
+    heapq.heapify(events)
 
-    # before the loop
-    current_second = 0.0  # in seconds, rounded to 0.1s increments
-    previous_second = 0.0
-    # Main simulation loop
-    
-    cnt = 0
-    while events:
-        ev = heapq.heappop(events)
-        now     = ev.time
-        job_ev  = ev.job
-        phase   = ev.etype
-
-        # drop stale job events
-        if job_ev and phase != "arrival":
-            if phase == "io_done" and now != job.next_io_done:
-                continue
-            elif phase == "shuffle_done" and now != job.next_shuffle_done:
-                continue
-            elif phase == "cpu_done" and now != job.next_cpu_done:
-                continue
-        if phase == "arrival":
-            arriving = ev.job
-            # I/O side:
-            waiting_jobs.append(arriving)
-            # CPU side:
-            buffer_jobs.append(arriving)
-        
-        previous_second = current_second
-        
-        # Round *up* to the next tenth:
-        current_second = math.ceil(now * 10) / 10
-
-        if current_second == previous_second and current_second != 0.0:
-            continue
-        second_range = current_second - previous_second
-
-        # time.sleep(0.5)
-        # print("We start at", current_second, "with", len(io_jobs), len(cpu_jobs))
-
-        # 2) Charge cost
-        if architecture != 3 or capacity_pricing:
-            money, vpu_charge, slots_charge = cost_calculator(
-                second_range, architecture, money, nodes, base_n,
-                sec_money, vpu, vpu_charge,
-                spot, interrupt, slots, slots_charge
-            )
-
-        # Check and perform autoscaling if applicable
-        if architecture == 1 and autoscaler:
-            nodes, cpu_cores, io_bandwidth, memoryz = autoscaler.autoscaling_dw(
-                scaling, cpu_jobs, io_jobs, waiting_jobs, buffer_jobs,
-                nodes, cpu_cores_per_node, io_bandwidth, cpu_cores,
-                base_n, memoryz, current_second, second_range, events
-            )
-            if current_second % 60000 == 0:
-                scale_observe.append(nodes)
-        elif architecture == 2 and autoscaler:
-            vpu, cpu_cores = autoscaler.autoscaling_ec(
-                scaling, cpu_jobs, io_jobs, waiting_jobs, buffer_jobs,
-                vpu, cpu_cores, base_cores, current_second, second_range, events
-            )
-            if current_second % 60000 == 0:
-                scale_observe.append(vpu)
+    return (
+        state, autoscaler, jobs, workload_data_scanned_mb, cpu_cores_per_node,
+        cost_per_sec_usd, nodes, cpu_cores, io_bw, vpu, network_bw, memory_bw, total_memory_capacity_mb,
+        scaling, scheduling, hit_rate, cold_start, events
+    )
 
 
-        # Schedule I/O jobs        
-        io_scheduler(
-            scheduling, architecture, current_second, second_range,
-            jobs, waiting_jobs, io_jobs,
-            cpu_cores, phase
+# ----------------------------
+# Core Logic
+# ----------------------------
+
+def charge_costs(state, architecture, dt, nodes, base_n, cost_per_sec_usd, vpu, slots, spot, interrupt):
+    if architecture not in [ArchitectureType.QAAS, ArchitectureType.QAAS_CAPACITY]:  # QaaS handled separately
+        state["accumulated_cost_usd"], state["vpu_charge"], state["accumulated_slot_hours"] = cost_calculator(
+            dt, architecture, state["accumulated_cost_usd"], nodes, base_n, cost_per_sec_usd,
+            vpu, state["vpu_charge"], spot, interrupt, slots, state["accumulated_slot_hours"]
         )
 
-        # Schedule CPU jobs
-        cpu_scheduler(
-            scheduling, architecture, current_second,
-            jobs, buffer_jobs, cpu_jobs,
-            cpu_cores, memory, second_range, phase
+
+def maybe_autoscale(architecture, autoscaler, scaling, state, nodes, cpu_cores_per_node,
+                    io_bw, cpu_cores, base_n, total_memory_capacity_mb, now, dt, events):
+    if not autoscaler:
+        return nodes, cpu_cores, io_bw, total_memory_capacity_mb, 0
+
+    if architecture == ArchitectureType.DWAAS_AUTOSCALING:
+        nodes, cpu_cores, io_bw, total_memory_capacity_mb = autoscaler.autoscaling_dw(
+            scaling, state["cpu_jobs"], state["io_jobs"],
+            state["waiting_jobs"], state["buffer_jobs"],
+            nodes, cpu_cores_per_node, io_bw, cpu_cores, base_n,
+            total_memory_capacity_mb, now, dt, events
         )
+        return nodes, cpu_cores, io_bw, total_memory_capacity_mb, nodes
 
-        # print("After scheduling we have", len(io_jobs), len(cpu_jobs), cpu_cores)
-        # if cnt % 50000 == 1:
-        # print("We start at", current_second, "with", len(io_jobs), len(cpu_jobs))
-        # Logging information about running jobs if required
-        # if simulation_params[3] == 1:
-        #     df.loc[df["query_id"] == 13, "cpu_time"] *= 0.8(
-        #         f"Time {current_second}: I/O Jobs: {len(io_jobs)}, CPU Jobs: {len(cpu_jobs)}, "
-        #         f"Buffer Jobs: {len(buffer_jobs)}, Waiting Jobs: {len(waiting_jobs)}"
-        #     )
-
-        # Simulate I/O operations based on architecture
-        simulate_io(
-            current_second, hit_rate, nodes, io_jobs, io_bandwidth,
-            memory_bandwidth, phase, buffer_jobs, cpu_jobs,
-            finished_jobs, job_memory_tiers, dram_nodes,
-            dram_job_counts, second_range, events, architecture
+    elif architecture == ArchitectureType.ELASTIC_POOL:
+        vpu, cpu_cores = autoscaler.autoscaling_ec(
+            scaling, state["cpu_jobs"], state["io_jobs"],
+            state["waiting_jobs"], state["buffer_jobs"],
+            0, cpu_cores, base_n, now, dt, events
         )
-            
-        # Simulate CPU operations based on architecture
-        slots = simulate_cpu(
-                current_second, cpu_jobs, phase,
-                cpu_cores, cpu_cores_per_node, network_bandwidth,
-                finished_jobs, shuffled_jobs,
-                io_jobs, waiting_jobs, {}, memory, second_range, events, architecture
-            )
+        return nodes, cpu_cores, io_bw, total_memory_capacity_mb, vpu
 
-        # Track memory usage every 60 seconds
-        if current_second % 60000 == 0:
-            if memoryz != 0:
-                mem_track.append(ceil((memory[0] / memoryz) * 100))
+    return nodes, cpu_cores, io_bw, total_memory_capacity_mb, 0
 
-        # Simulate spot instance interruptions
-        if spot and interrupt_countdown == 0:
-            if random.random() < INTERRUPT_PROBABILITY:
-                handle_interrupt(io_jobs, cpu_jobs, buffer_jobs, waiting_jobs,
-                                 shuffled_jobs, jobs, current_second)
-                interrupt_countdown = INTERRUPT_DURATION
-        elif interrupt_countdown > 0:
-            interrupt_countdown -= 1
 
-        # Sleep to simulate real-time passage if needed
-        # time.sleep(simulation_params[1])
-    
+def process_event(ev, state, now, phase):
+    job = ev.job
+
+    if phase == "arrival":
+        state["waiting_jobs"].append(job)
+        state["buffer_jobs"].append(job)
+        return
+
+    pass
+
+
+def maybe_interrupt(state, jobs, current_second, spot, config):
+    if not spot:
+        return
+    if state["interrupt_countdown"] == 0 and random.random() < config.interrupt_probability:
+        handle_interrupt(
+            state["io_jobs"], state["cpu_jobs"],
+            state["buffer_jobs"], state["waiting_jobs"],
+            state["shuffled_jobs"], jobs, current_second, config
+        )
+        state["interrupt_countdown"] = config.interrupt_duration
+        logging.warning("Spot instance interruption occurred.")
+    elif state["interrupt_countdown"] > 0:
+        state["interrupt_countdown"] -= 1
+
+
+# ----------------------------
+# Finalization
+# ----------------------------
+def collect_metrics(output_file: str, finished_jobs: List[Job], total_price: float):
+    """
+    Finalize the simulation by writing results to CSV, reading them back,
+    and computing + logging all performance metrics.
+    """
+
     # Write finished jobs to CSV
-    finished_jobs.sort(key=lambda job: job.start)
-
-
-    # Calculate total price based on architecture
-    if architecture in [0, 1]:
-        total_price = money
-    elif architecture == 2:
-        total_price = (second_range * vpu_charge) / 3600000 * COST_PER_RPU_HOUR
-    else:
-        if architecture > 2:
-            if capacity_pricing == 1:
-                total_price = slots_charge * second_range / 3600000 * COST_PER_SLOT_HOUR
-            else:
-                total_price = qaas_total_cost(costq)
-        else:
-            total_price = 0.0  # Default case
-
     write_to_csv(output_file, finished_jobs, total_price)
-    logging.info(f"Total Price: {total_price}")
 
-    # Process simulation results
+    # Load results
     try:
         df = pd.read_csv(output_file)
     except FileNotFoundError:
         logging.error(f"Output file '{output_file}' not found.")
-        return [], [], 0.0, 0.0, 0.0
+        return {}
     except Exception as e:
         logging.error(f"Error reading output file '{output_file}': {e}")
-        return [], [], 0.0, 0.0, 0.0
+        return {}
 
-    # Calculate metrics
+    # Compute all metrics (preserve your original ones)
     metrics = {
-        "average_queueing_delay": df['Queueing Delay'].mean(),
-        "average_buffer_delay": df['Buffer Delay'].mean(),
-        "average_io": df['I/O'].mean(),
-        "average_cpu": df['CPU'].mean(),
-        "average_shuffle": df['Shuffle'].mean(),
-        "average_query_latency": df['query_duration'].mean(),
-        "median_query_latency": df['query_duration'].median(),
-        "percentile_95_query_latency": np.percentile(df['query_duration'], 95),
-        "average_query_wq_latency": df['query_duration_with_queue'].mean(),
-        "median_query_wq_latency": df['query_duration_with_queue'].median(),
-        "percentile_95_query_wq_latency": np.percentile(df['query_duration_with_queue'], 95)
+        "average_queueing_delay": df["Queueing Delay"].mean(),
+        "average_buffer_delay": df["Buffer Delay"].mean(),
+        "average_io": df["I/O"].mean(),
+        "average_cpu": df["CPU"].mean(),
+        "average_shuffle": df["Shuffle"].mean(),
+        "average_query_latency": df["query_duration"].mean(),
+        "median_query_latency": df["query_duration"].median(),
+        "percentile_95_query_latency": np.percentile(df["query_duration"], 95),
+        "average_query_wq_latency": df["query_duration_with_queue"].mean(),
+        "median_query_wq_latency": df["query_duration_with_queue"].median(),
+        "percentile_95_query_wq_latency": np.percentile(df["query_duration_with_queue"], 95),
+        "total_price": total_price
     }
 
-    # Log metrics
-    logging.info(f"Queue: {metrics['average_queueing_delay']} | Buffer: {metrics['average_buffer_delay']}")
-    logging.info(f"Mean IO: {metrics['average_io']} | Mean CPU: {metrics['average_cpu']} | Mean Shuffle: {metrics['average_shuffle']}")
-    logging.info(f"Mean Query Latency: {metrics['average_query_latency']} | "
-                 f"Mean Query (with queueing) Latency: {metrics['average_query_wq_latency']}")
-    logging.info(f"Median Query Latency: {metrics['median_query_latency']} | "
-                 f"Median Query (with queueing) Latency: {metrics['median_query_wq_latency']}")
-    logging.info(f"95th Percentile Query Latency: {metrics['percentile_95_query_latency']} | "
-                 f"95th Percentile Query (with queueing) Latency: {metrics['percentile_95_query_wq_latency']}")
+    # --- Logging section (identical in spirit to your original) ---
+    logging.info("==== Simulation Metrics ====")
+    logging.info(f"Queue Delay Avg: {metrics['average_queueing_delay']:.4f} | "
+                 f"Buffer Delay Avg: {metrics['average_buffer_delay']:.4f}")
+    logging.info(f"Mean I/O: {metrics['average_io']:.4f} | "
+                 f"Mean CPU: {metrics['average_cpu']:.4f} | "
+                 f"Mean Shuffle: {metrics['average_shuffle']:.4f}")
+    logging.info(f"Mean Query Latency: {metrics['average_query_latency']:.4f} | "
+                 f"Mean Query (with queueing): {metrics['average_query_wq_latency']:.4f}")
+    logging.info(f"Median Query Latency: {metrics['median_query_latency']:.4f} | "
+                 f"Median Query (with queueing): {metrics['median_query_wq_latency']:.4f}")
+    logging.info(f"95th Percentile Query Latency: {metrics['percentile_95_query_latency']:.4f} | "
+                 f"95th Percentile Query (with queueing): {metrics['percentile_95_query_wq_latency']:.4f}")
+    logging.info(f"Total Price: ${metrics['total_price']:.4f}")
+    logging.info("=============================")
 
-    # Optionally, print metrics to console
-    print(f"Queue: {metrics['average_queueing_delay']} | Buffer: {metrics['average_buffer_delay']}")
-    print(f"Mean IO: {metrics['average_io']} | Mean CPU: {metrics['average_cpu']} | Mean Shuffle: {metrics['average_shuffle']}")
-    print(f"Mean Query Latency: {metrics['average_query_latency']} | "
-          f"Mean Query (with queueing) Latency: {metrics['average_query_wq_latency']}")
-    print(f"Median Query Latency: {metrics['median_query_latency']} | "
-          f"Median Query (with queueing) Latency: {metrics['median_query_wq_latency']}")
-    print(f"95th Percentile Query Latency: {metrics['percentile_95_query_latency']} | "
-          f"95th Percentile Query (with queueing) Latency: {metrics['percentile_95_query_wq_latency']}")
-    print(cnt)
-    return scale_observe, mem_track, metrics['average_query_latency'], metrics['average_query_wq_latency'], total_price, metrics['median_query_latency'], metrics['percentile_95_query_latency']
+    return metrics
+
+# ----------------------------
+# Main Entry Point
+# ----------------------------
+def schedule_jobs(
+    architecture: ArchitectureType,
+    execution_params: List,
+    simulation_params: List,
+    output_file: str,
+    config: SimulationConfig,
+):
+    (
+        state, autoscaler, jobs, workload_data_scanned_mb, cpu_cores_per_node, cost_per_sec_usd,
+        nodes, cpu_cores, io_bw, vpu, network_bw, memory_bw, total_memory_capacity_mb,
+        scaling, scheduling, hit_rate, cold_start, events
+    ) = initialize_state(architecture, execution_params, simulation_params, config)
+
+    current_second, prev_second = 0.0, 0.0
+    spot = 0
+    capacity_pricing = 1 if architecture == ArchitectureType.QAAS_CAPACITY else 0
+    slots = 0
+
+    while events:
+        ev = heapq.heappop(events)
+        now = ev.time
+        phase = ev.etype
+
+        process_event(ev, state, now, phase)
+
+        prev_second, current_second = current_second, math.ceil(now * 10) / 10
+        if current_second == prev_second:
+            continue
+
+        dt = current_second - prev_second
+        charge_costs(state, architecture, dt, nodes, state["base_n"], cost_per_sec_usd, vpu, slots, spot, 0)
+
+        # Autoscaling
+        nodes, cpu_cores, io_bw, total_memory_capacity_mb, current_scale_level = maybe_autoscale(
+            architecture, autoscaler, scaling, state, nodes,
+            cpu_cores_per_node, io_bw, cpu_cores, state["base_n"], total_memory_capacity_mb,
+            current_second, dt, events
+        )
+        if current_scale_level and current_second % 60 == 0:
+            state["scale_observe"].append(current_scale_level)
+
+        # Scheduling
+        io_scheduler(scheduling, architecture, current_second, dt, jobs,
+                     state["waiting_jobs"], state["io_jobs"], cpu_cores, phase)
+
+        cpu_scheduler(scheduling, architecture, current_second, jobs,
+                      state["buffer_jobs"], state["cpu_jobs"],
+                      cpu_cores, state["memory"], dt, phase, config)
+
+        # Simulations
+        simulate_io(current_second, hit_rate, nodes, state["io_jobs"], io_bw,
+                    memory_bw, phase, state["buffer_jobs"], state["cpu_jobs"],
+                    state["finished_jobs"], state["job_memory_tiers"],
+                    state["dram_nodes"], state["dram_job_counts"], dt, events, architecture, config)
+
+        slots = simulate_cpu(current_second, state["cpu_jobs"], phase, cpu_cores,
+                             cpu_cores_per_node, network_bw, state["finished_jobs"],
+                             state["shuffled_jobs"], state["io_jobs"], state["waiting_jobs"],
+                             {}, state["memory"], dt, events, architecture, config)
+
+        # Interrupts
+        maybe_interrupt(state, jobs, current_second, spot, config)
+
+        # Track memory every 60s
+        if current_second % 60 == 0 and total_memory_capacity_mb > 0:
+            usage = math.ceil((state["memory"][0] / total_memory_capacity_mb) * 100)
+            state["mem_track"].append(usage)
+
+    # Final pricing
+    if architecture in [ArchitectureType.DWAAS, ArchitectureType.DWAAS_AUTOSCALING]:
+        total_price = state["accumulated_cost_usd"]
+    elif architecture == ArchitectureType.ELASTIC_POOL:
+        total_price = (state["vpu_charge"] / 3600) * config.cost_per_rpu_hour
+    elif architecture in [ArchitectureType.QAAS, ArchitectureType.QAAS_CAPACITY]:
+        total_price = (
+            state["accumulated_slot_hours"] / 3600 * config.cost_per_slot_hour
+            if capacity_pricing else qaas_total_cost(workload_data_scanned_mb)
+        )
+    else:
+        total_price = 0.0
+
+    if not state["finished_jobs"]:
+        logging.warning("⚠️ No finished jobs detected. Simulation likely not completing any I/O or CPU.")
+
+
+    finished_jobs = sorted(state["finished_jobs"], key=lambda j: j.start)
+    metrics = collect_metrics(output_file, finished_jobs, total_price)
+
+    return (
+        state["scale_observe"],
+        state["mem_track"],
+        metrics["average_query_latency"],
+        metrics["average_query_wq_latency"],
+        total_price,
+        metrics["median_query_latency"],
+        metrics["percentile_95_query_latency"],
+    )
