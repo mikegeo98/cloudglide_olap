@@ -52,7 +52,7 @@ def get_io_latency_data_from_files(output_files):
         df = pd.read_csv(file)
         
         # Calculate the average query duration and query duration with queueing
-        avg_query_exec_time = df['I/O'].mean()
+        avg_query_exec_time = df["io"].mean()
         avg_query_exec_time_queueing = df['query_duration_with_queue'].mean()
 
         # If 'mon_cost' is the same in every row, we can just take the first value

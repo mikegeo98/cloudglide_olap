@@ -1,7 +1,8 @@
 # config.py
 
-from dataclasses import dataclass
-from typing import List
+from dataclasses import dataclass, field
+from typing import Any, Dict, List
+from copy import deepcopy
 from enum import Enum
 
 # ==========================================================
@@ -45,6 +46,38 @@ INSTANCE_TYPES: List[InstanceConfig] = [
 # ==========================================================
 # 3. Simulation Configuration
 # ==========================================================
+def _default_scheduling_options() -> Dict[str, Any]:
+    return {
+        "max_io_concurrency": None,
+        "max_cpu_concurrency": None,
+        "multi_level_queues": []
+    }
+
+
+def _default_scaling_options() -> Dict[str, Any]:
+    return {
+        "queue": {
+            "length_thresholds": [5, 10, 15, 20],
+            "scale_steps": [4, 8, 12, 16],
+            "scale_in_utilization": 0.4,
+            "scale_in_step": 4,
+        },
+        "reactive": {
+            "cpu_utilization_thresholds": [0.6, 0.7, 0.8],
+            "scale_steps": [8, 16, 24],
+            "scale_in_utilization": 0.1,
+            "scale_in_step": 8,
+        },
+        "predictive": {
+            "growth_factor": 1.2,
+            "decline_factor": 0.75,
+            "history": 3,
+            "observation_interval": 10000,
+            "scale_step": 4,
+        },
+    }
+
+
 @dataclass
 class SimulationConfig:
     # Scaling
@@ -76,12 +109,59 @@ class SimulationConfig:
     materialization_fraction: float = 0.25
     parallelizable_portion: float = 0.9
 
-    qaas_io_per_core_bw = 150
-    qaas_shuffle_bw_per_core = 50
-    qaas_base_cores = 4
-    qaas_base_time_limit = 2
-    core_alloc_window = 10.0
-    s3_bandwidth = 1000
+    use_spot_instances: bool = False
+    default_estimator: str = "pm"
+    pm_p: float = 4.0
+    delta: float = 0.3
+    queue_agg: str = "sum"
+
+    qaas_io_per_core_bw: int = 150
+    qaas_shuffle_bw_per_core: int = 50
+    qaas_base_cores: int = 4
+    qaas_base_time_limit: int = 2
+    core_alloc_window: float = 10.0
+    s3_bandwidth: int = 1000
+
+    scheduling_options: Dict[str, Any] = field(default_factory=_default_scheduling_options)
+    scaling_options: Dict[str, Any] = field(default_factory=_default_scaling_options)
+
+    def copy(self) -> "SimulationConfig":
+        clone = deepcopy(self)
+        return clone
+
+    def apply_overrides(self, overrides: Dict[str, Any]) -> None:
+        """
+        Update config attributes (including nested scheduling/scaling dictionaries)
+        using values supplied in overrides.
+        """
+        if not overrides:
+            return
+
+        data = dict(overrides)
+        scheduling_payload = data.pop("scheduling", None) or data.pop("scheduling_options", None)
+        scaling_payload = data.pop("scaling", None) or data.pop("scaling_options", None)
+
+        for key, value in data.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+
+        if scheduling_payload:
+            self.scheduling_options = _deep_merge_dicts(self.scheduling_options, scheduling_payload)
+        if scaling_payload:
+            self.scaling_options = _deep_merge_dicts(self.scaling_options, scaling_payload)
+
+
+def _deep_merge_dicts(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Return a new dict that merges overrides into base recursively.
+    """
+    result = deepcopy(base)
+    for key, value in overrides.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = _deep_merge_dicts(result[key], value)
+        else:
+            result[key] = deepcopy(value)
+    return result
 
 # ==========================================================
 # 4. Dataset File Mapping
@@ -105,15 +185,3 @@ DATASET_FILES = {
     999: "cloudglide/datasets/tpch_all_runs.csv",
 }
 
-# ==========================================================
-# 5. Estimator Defaults
-# ==========================================================
-DEFAULT_ESTIMATOR = "pm"   # "max", "cpu_only", "sum", "pm", "mw"
-PM_P = 4.0                 # p for power-mean
-DELTA = 0.3                # fixed offset for MAX+δ
-QUEUE_AGG = "sum"          # how to combine queue + buffer delays
-
-
-# Cache and memory parameters
-FMEM = 0.7                      
-DELTA_SPILLED = 0.3             

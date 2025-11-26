@@ -3,7 +3,7 @@ import math
 import logging
 import random
 from collections import deque
-from typing import List, Tuple
+from typing import List
 import numpy as np
 import pandas as pd
 
@@ -31,7 +31,11 @@ def initialize_state(architecture: int, execution_params: List, simulation_param
         network_bw, memory_bw, total_memory_capacity_mb, cold_start, hit_rate
     ) = execution_params
 
-    autoscaler = Autoscaler(cold_start) if architecture in [ArchitectureType.DWAAS_AUTOSCALING, ArchitectureType.ELASTIC_POOL] else None
+    autoscaler = (
+        Autoscaler(cold_start, config.scaling_options)
+        if architecture in [ArchitectureType.DWAAS_AUTOSCALING, ArchitectureType.ELASTIC_POOL]
+        else None
+    )
     state = {
         "waiting_jobs": deque(),
         "io_jobs": deque(),
@@ -165,11 +169,11 @@ def collect_metrics(output_file: str, finished_jobs: List[Job], total_price: flo
 
     # Compute all metrics (preserve your original ones)
     metrics = {
-        "average_queueing_delay": df["Queueing Delay"].mean(),
-        "average_buffer_delay": df["Buffer Delay"].mean(),
-        "average_io": df["I/O"].mean(),
-        "average_cpu": df["CPU"].mean(),
-        "average_shuffle": df["Shuffle"].mean(),
+        "average_queueing_delay": df["queueing_delay"].mean(),
+        "average_buffer_delay": df["buffer_delay"].mean(),
+        "average_io": df["io"].mean(),
+        "average_cpu": df["cpu"].mean(),
+        "average_shuffle": df["shuffle"].mean(),
         "average_query_latency": df["query_duration"].mean(),
         "median_query_latency": df["query_duration"].median(),
         "percentile_95_query_latency": np.percentile(df["query_duration"], 95),
@@ -214,7 +218,7 @@ def schedule_jobs(
     ) = initialize_state(architecture, execution_params, simulation_params, config)
 
     current_second, prev_second = 0.0, 0.0
-    spot = 0
+    spot = 1 if config.use_spot_instances else 0
     capacity_pricing = 1 if architecture == ArchitectureType.QAAS_CAPACITY else 0
     slots = 0
 
@@ -242,12 +246,33 @@ def schedule_jobs(
             state["scale_observe"].append(current_scale_level)
 
         # Scheduling
-        io_scheduler(scheduling, architecture, current_second, dt, jobs,
-                     state["waiting_jobs"], state["io_jobs"], cpu_cores, phase)
+        io_scheduler(
+            scheduling,
+            architecture,
+            current_second,
+            dt,
+            jobs,
+            state["waiting_jobs"],
+            state["io_jobs"],
+            cpu_cores,
+            phase,
+            config.scheduling_options,
+        )
 
-        cpu_scheduler(scheduling, architecture, current_second, jobs,
-                      state["buffer_jobs"], state["cpu_jobs"],
-                      cpu_cores, state["memory"], dt, phase, config)
+        cpu_scheduler(
+            scheduling,
+            architecture,
+            current_second,
+            jobs,
+            state["buffer_jobs"],
+            state["cpu_jobs"],
+            cpu_cores,
+            state["memory"],
+            dt,
+            phase,
+            config,
+            config.scheduling_options,
+        )
 
         # Simulations
         simulate_io(current_second, hit_rate, nodes, state["io_jobs"], io_bw,

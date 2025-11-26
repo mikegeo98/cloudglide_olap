@@ -109,9 +109,20 @@ def write_to_csv(path: str, data: List[Job], total_price: float):
 
     # column header
     columns = [
-        'job_id','query_id','database_id','start','start_timestamp','end_timestamp',
-        'Queueing Delay','Buffer Delay','I/O','CPU','Shuffle',
-        'query_duration_with_queue','query_duration','mon_cost'
+        "job_id",
+        "query_id",
+        "database_id",
+        "start",
+        "start_timestamp",
+        "end_timestamp",
+        "queueing_delay",
+        "buffer_delay",
+        "io",
+        "cpu",
+        "shuffle",
+        "query_duration_with_queue",
+        "query_duration",
+        "mon_cost",
     ]
 
     # use StringIO as an in-memory text buffer
@@ -153,11 +164,11 @@ def analyze_results(filepath):
             print(f"The CSV file '{filepath}' is empty.")
             return ""
 
-        max_4th_column = (df['Queueing Delay'].max() - 360000) / 1000
-        average_5th_column = df['query_duration'].mean() / 1000
+        max_4th_column = (df["queueing_delay"].max() - 360000) / 1000
+        average_5th_column = df["query_duration"].mean() / 1000
 
         thresholds = [180000, 240000, 300000, 360000]
-        count_less = [(df['Queueing Delay'] < threshold).sum() for threshold in thresholds]
+        count_less = [(df["queueing_delay"] < threshold).sum() for threshold in thresholds]
 
         print("Filename:", filepath)
         print("Maximum of 4th column (Adjusted):", max_4th_column)
@@ -193,8 +204,8 @@ def process_and_plot_csv(file_paths, num_plots=4, save_path=None):
     for file_path in file_paths:
         try:
             df = pd.read_csv(file_path)
-            actual_range_start = df['Start_Timestamp'].min()
-            actual_range_end = df['End_Timestamp'].max()
+            actual_range_start = df["start_timestamp"].min()
+            actual_range_end = df["end_timestamp"].max()
 
             global_range_start = min(global_range_start, actual_range_start)
             global_range_end = max(global_range_end, actual_range_end)
@@ -214,7 +225,8 @@ def process_and_plot_csv(file_paths, num_plots=4, save_path=None):
             range_counts = [0] * ((global_range_end - global_range_start) // step_size + 1)
 
             for _, row in df.iterrows():
-                actual_start_time, end_time = float(row['Start_Timestamp']), float(row['End_Timestamp'])
+                actual_start_time = float(row["start_timestamp"])
+                end_time = float(row["end_timestamp"])
                 for i, start in enumerate(range(global_range_start, global_range_end + 1, step_size)):
                     range_lower, range_upper = start, start + step_size - 1
                     if (range_lower <= actual_start_time <= range_upper) \

@@ -82,12 +82,40 @@ def ljf_policy(source_q: deque, target_q: deque, slots: int, now: float, metric:
         target_q.append(job)
 
 
-def multi_queue_policy(source_q: deque, target_q: deque, slots: int, now: float):
+def multi_queue_policy(source_q: deque, target_q: deque, slots: int, now: float, options=None):
     """
-    Placeholder for future hybrid / multi-queue policies.
-    Currently same as FCFS.
+    Multi-level queue policy. Each queue definition can specify its own
+    priority (order in the list), selection criteria, ordering, and per-queue
+    concurrency cap. When no definition is provided, fall back to FCFS.
     """
-    fcfs_policy(source_q, target_q, slots, now)
+    queue_defs = (options or {}).get("multi_level_queues", []) if options else []
+    if not queue_defs:
+        fcfs_policy(source_q, target_q, slots, now)
+        return
+
+    remaining = slots
+    for queue_def in queue_defs:
+        if remaining <= 0:
+            break
+        metric = queue_def.get("criteria", "queueing_delay")
+        order = queue_def.get("order", "asc").lower()
+        ascending = order != "desc"
+        limit = queue_def.get("max_concurrency")
+        capacity = min(limit if limit is not None else remaining, remaining)
+        selected = pick_jobs_by_metric(
+            source_q,
+            metric=metric,
+            ascending=ascending,
+            limit=capacity,
+        )
+        for job in selected:
+            if job.start_timestamp == 0.0:
+                job.start_timestamp = now
+            target_q.append(job)
+        remaining -= len(selected)
+
+    if remaining > 0 and source_q:
+        fcfs_policy(source_q, target_q, remaining, now)
 
 
 # ----------------------------
@@ -103,6 +131,7 @@ def io_scheduler(
     io_jobs: deque,
     cpu_cores: int,
     phase: str,
+    options=None,
 ):
     if phase not in ("arrival", "io_done", "scale_check"):
         return
@@ -120,6 +149,12 @@ def io_scheduler(
     if phase == "io_done":
         capacity += 1  # allow refill immediately after a completion
 
+    # Optional concurrency ceiling
+    if options:
+        max_active = options.get("max_io_concurrency")
+        if max_active is not None:
+            capacity = min(capacity, max_active)
+
     # If full, just age delays
     if len(io_jobs) >= capacity:
         age_jobs_delay(waiting_jobs, "queueing_delay", dt)
@@ -135,9 +170,9 @@ def io_scheduler(
     elif policy == SchedulingPolicy.LJF:
         ljf_policy(waiting_jobs, io_jobs, slots, now, metric="data_scanned")
     else:
-        multi_queue_policy(waiting_jobs, io_jobs, slots, now)
+        multi_queue_policy(waiting_jobs, io_jobs, slots, now, options or {})
 
-    logging.debug(f"[{now/1000:.1f}s] I/O Scheduler: policy={policy.name}, added={slots}")
+    # logging.debug(f"[{now/1000:.1f}s] I/O Scheduler: policy={policy.name}, added={slots}")
 
 
 # ----------------------------
@@ -155,6 +190,7 @@ def cpu_scheduler(
     dt: float,
     phase: str,
     config,
+    options=None,
 ):
     if phase not in ("arrival", "cpu_done", "scale_check"):
         return
@@ -169,6 +205,10 @@ def cpu_scheduler(
         base_free = len(buffer_jobs)
 
     free_slots = base_free + (1 if phase == "cpu_done" else 0)
+    if options:
+        max_cpu = options.get("max_cpu_concurrency")
+        if max_cpu is not None:
+            free_slots = min(free_slots, max_cpu)
     if free_slots <= 0:
         age_jobs_delay(buffer_jobs, "buffer_delay", dt)
         return
@@ -191,4 +231,4 @@ def cpu_scheduler(
     # Age remaining jobs
     age_jobs_delay(buffer_jobs, "buffer_delay", dt)
 
-    logging.debug(f"[{now/1000:.1f}s] CPU Scheduler: policy={policy.name}, added={free_slots}, mem={memory[0]:.2f}")
+    # logging.debug(f"[{now/1000:.1f}s] CPU Scheduler: policy={policy.name}, added={free_slots}, mem={memory[0]:.2f}")

@@ -1,23 +1,17 @@
 # simulation_runner.py
-import cProfile
-import itertools
 import logging
-from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import os
-import pstats
 
 import psutil
 from cloudglide.execution_model import schedule_jobs
 from typing import List, Tuple
-import numpy as np
 from cloudglide.config import DATASET_FILES, ArchitectureType, SimulationConfig
 from cloudglide.config import (
     INSTANCE_TYPES,
 )
 
-from cloudglide.cost_model import qaas_total_cost
-from cloudglide.visual_model import write_to_csv
+from copy import deepcopy
 
 
 def get_instance_config(instance_index: int, nodes: int) -> dict:
@@ -140,49 +134,53 @@ def configure_simulation_params(ds_idx: int, config) -> List:
 
 
 
+@dataclass
+class SimulationRun:
+    name: str
+    architecture: ArchitectureType
+    scheduling_policy: int
+    nodes: int
+    vpu: int
+    scaling_policy: int
+    cold_start: float
+    hit_rate: float
+    instance: int
+    arrival_rate: float
+    network_bandwidth: int
+    io_bandwidth: int
+    memory_bandwidth: int
+    dataset_index: int
+    config: SimulationConfig
+
+
 def run_simulation(
-    architecture: List[int],
-    scheduling: List[int],
-    nodes: List[int],
-    vpu: List[int],
-    scaling: List[int],
-    cold_starts: List[bool],
-    hit_rate: List[float],
-    instance: List[int],
-    arrival_rate: List[float],
-    network_bandwidth: List[int],
-    io_bandwidth: List[int],
-    memory_bandwidth: List[int],
-    dataset_index: List[int],
+    runs: List[SimulationRun],
     output_prefix: str
 ) -> Tuple[List[str], List[List], List[List], List[List]]:
     """
-    Run simulations for all parameter combinations.
+    Run simulations for pre-expanded run configurations.
     """
-    all_params = itertools.product(
-        architecture,
-        scheduling,
-        nodes,
-        vpu,
-        scaling,
-        cold_starts,
-        hit_rate,
-        instance,
-        arrival_rate,
-        network_bandwidth,
-        io_bandwidth,
-        memory_bandwidth,
-        dataset_index
-    )
     output_files = []
     scalings = []
     memories = []
     results = []
     file_counter = 1
 
-    for param in all_params:
-        config = SimulationConfig()
-        arch, sched, node, v, sc, cs, hr, inst, ar, nb, iob, mb, ds_idx = param
+    for run in runs:
+        config = run.config.copy()
+        arch = run.architecture.value if isinstance(run.architecture, ArchitectureType) else run.architecture
+        sched = run.scheduling_policy
+        node = run.nodes
+        v = run.vpu
+        sc = run.scaling_policy
+        cs = run.cold_start
+        hr = run.hit_rate
+        inst = run.instance
+        ar = run.arrival_rate
+        nb = run.network_bandwidth
+        iob = run.io_bandwidth
+        mb = run.memory_bandwidth
+        ds_idx = run.dataset_index
         exec_params = configure_execution_params(
             arch, sched, node, v, sc, cs, hr, inst, ar, nb, iob, mb)
         sim_params = configure_simulation_params(ds_idx, config)
@@ -192,7 +190,7 @@ def run_simulation(
         file_counter += 1
 
         logging.info(
-            f"---------EXECUTION---------\n"
+            f"---------EXECUTION ({run.name})---------\n"
             f"Architecture: {arch}, Scheduling: {sched}, Nodes: {node}, VPU: {v}, Scaling: {sc}, "
             f"Cold Starts: {cs}, Hit Rate: {hr}, Instance: {inst}, Arrival Rate: {ar}, "
             f"Network Bandwidth: {nb}, I/O Bandwidth: {iob}, Memory Bandwidth: {mb}, Dataset: {ds_idx}"
@@ -201,7 +199,7 @@ def run_simulation(
         proc = psutil.Process(os.getpid())
         before = proc.memory_info().rss
         
-        arch_enum = ArchitectureType(arch) 
+        arch_enum = ArchitectureType(arch) if not isinstance(run.architecture, ArchitectureType) else run.architecture
         
         scales, mems, lat, lat_queue, money, med, ninetyfive = schedule_jobs(
             arch_enum, exec_params, sim_params, output_file_path, config

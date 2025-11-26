@@ -81,25 +81,109 @@ The framework is designed for research experiments, allowing you to define test 
 - **data scanned**
 - and more...
 
-**JSON simulation specs** (e.g., `tpch.json`) reside in the `cloudglide/simulations` directory. These files define parameter sets for the simulation runner. Below is an example:
+**JSON simulation specs** (e.g., `tpch.json`) live in `cloudglide/simulations/` and follow a flattened, web-friendly schema:
+
+- `defaults.simulation`: override any `SimulationConfig` field (costs, logging interval, estimator, QAAS bandwidths, spot behaviour, etc.).
+- `defaults.scheduling`: specify the default scheduler policy plus concurrency caps or multi-level queue definitions.
+- `defaults.scaling`: declare the default autoscaling policy (`queue`, `reactive`, or `predictive`) along with queue length thresholds, utilization limits, and predictive tuning knobs.
+- `scenarios[]`: list of named scenarios. Each scenario can override config defaults, provide base parameters (architecture, dataset, nodes, etc.), and declare multiple `runs`. Every run can tweak scheduling/scaling policy, set per-run overrides (e.g., enable spot instances), and set any simulation parameter (arrival rate, hit rate, bandwidths, cold-start timers, …).
+
+Example:
 
 ```json
 {
-  "test_case_keyword": {
-    "architecture_values": [0],
-    "scheduling_values": [1],
-    "nodes_values": [1],
-    "vpu_values": [0],
-    "scaling_values": [1],
-    "cold_starts_values": [false],
-    "hit_rate_values": [0.9],
-    "instance_values": [0],
-    "arrival_rate_values": [10.0],
-    "network_bandwidth_values": [10000],
-    "io_bandwidth_values": [650],
-    "memory_bandwidth_values": [40000],
-    "dataset_values": [999]
-  }
+  "defaults": {
+    "simulation": {
+      "interrupt_probability": 0.01,
+      "spot_discount": 0.5,
+      "cost_per_second_redshift": 0.00030166666,
+      "logging_interval": 60,
+      "default_estimator": "pm",
+      "materialization_fraction": 0.25,
+      "parallelizable_portion": 0.9,
+      "cold_start_delay": 60,
+      "cache_warmup_gamma": 0.05,
+      "qaas_io_per_core_bw": 150,
+      "qaas_shuffle_bw_per_core": 50,
+      "qaas_base_cores": 4,
+      "qaas_base_time_limit": 2,
+      "core_alloc_window": 10,
+      "s3_bandwidth": 1000
+    },
+    "scheduling": {
+      "policy": "fcfs",
+      "max_io_concurrency": 64,
+      "max_cpu_concurrency": 64
+    },
+    "scaling": {
+      "policy": "queue",
+      "queue": {
+        "length_thresholds": [5, 10, 15, 20],
+        "scale_steps": [4, 8, 12, 16],
+        "scale_in_utilization": 0.4
+      },
+      "reactive": {
+        "cpu_utilization_thresholds": [0.6, 0.7, 0.8],
+        "scale_steps": [8, 16, 24],
+        "scale_in_utilization": 0.2
+      },
+      "predictive": {
+        "growth_factor": 1.2,
+        "decline_factor": 0.75,
+        "history": 3,
+        "observation_interval": 10000
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "name": "tpch_all",
+      "architecture": "QAAS",
+      "dataset": 999,
+      "nodes": 2,
+      "arrival_rate": 0.1,
+      "hit_rate": 0.7,
+      "runs": [
+        {
+          "name": "tpch_fcfs_base",
+          "scheduling": {
+            "policy": "fcfs",
+            "max_io_concurrency": 32,
+            "max_cpu_concurrency": 16
+          },
+          "scaling": {
+            "policy": "queue",
+            "queue": {
+              "length_thresholds": [4, 8, 12],
+              "scale_steps": [2, 4, 8]
+            }
+          }
+        },
+        {
+          "name": "tpch_multi_queue",
+          "scheduling": {
+            "policy": "multi_level",
+            "multi_level_queues": [
+              { "name": "latency", "criteria": "queueing_delay", "order": "desc", "max_concurrency": 4 },
+              { "name": "short", "criteria": "data_scanned", "order": "asc", "max_concurrency": 8 }
+            ]
+          },
+          "scaling": {
+            "policy": "predictive",
+            "predictive": {
+              "growth_factor": 1.15,
+              "decline_factor": 0.8,
+              "history": 4,
+              "observation_interval": 8000
+            }
+          },
+          "config_overrides": {
+            "use_spot_instances": true
+          }
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -165,7 +249,7 @@ When `--benchmark` is enabled, **`main.py`** compares the simulation results aga
 After a run, CloudGlide writes simulation results in CSV format under the specified `--output_prefix` (or the default `cloudglide/output_simulation/simulation`).
 
 - Each parameter combination in your JSON scenario creates a new CSV file named `<prefix>_1.csv`, `<prefix>_2.csv`, etc.
-- Columns in the CSV include `query_duration`, `query_duration_with_queue`, `Queueing Delay`, `CPU`, `I/O`, etc.
+- Columns in the CSV include `query_duration`, `query_duration_with_queue`, `queueing_delay`, `cpu`, `io`, etc.
 - Logs are written to **`simulation.log`** in the project root (or wherever configured in `main.py`).
 
 ## 7. Extending CloudGlide

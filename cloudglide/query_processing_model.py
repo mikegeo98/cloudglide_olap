@@ -1,4 +1,4 @@
-from cloudglide.config import DEFAULT_ESTIMATOR, DELTA, PM_P, QUEUE_AGG, ArchitectureType
+from cloudglide.config import ArchitectureType
 from cloudglide.event import Event, next_event_counter
 
 import heapq
@@ -47,14 +47,11 @@ def assign_memory_tier(hit_rate, architecture, n, warmup_rate):
     P_SSD = remaining * 0.67
     P_S3 = remaining * 0.33
 
-    print(P_DRAM, P_SSD, P_S3)
-
     hit_probs = {
         "DRAM": P_DRAM,
         "SSD": P_SSD,
         "S3": P_S3,
     }
-    print(hit_probs)
     # Generate random number and assign memory tier
     rand_num = random.random()
     for tier, prob in hit_probs.items():
@@ -150,7 +147,7 @@ def simulate_io(
     if architecture == ArchitectureType.QAAS:
         for job in list(io_jobs):
             elapsed = current_second - max(job.start_timestamp, current_second - second_range)
-            cores = assign_cores_to_job_qaas(job)
+            cores = assign_cores_to_job_qaas(job, config.qaas_base_time_limit)
             bw = cores * config.qaas_io_per_core_bw  # bytes per second
 
             if job.data_scanned_progress == 0:
@@ -379,7 +376,7 @@ def simulate_cpu(
 
     if architecture in [ArchitectureType.QAAS, ArchitectureType.QAAS_CAPACITY]:
         return simulate_cpu_qaas(current_second, cpu_jobs, network_bandwidth,
-                finished_jobs, shuffle_jobs, waiting_jobs, io_jobs, {}, memory, second_range, events)
+                finished_jobs, shuffle_jobs, waiting_jobs, io_jobs, {}, memory, second_range, events, config)
     
     # Determine per-node core threshold
     per_node = cpu_cores_per_node
@@ -462,8 +459,17 @@ def simulate_cpu(
                 job.processing_time += time_used
                 job.cpu_time_progress = 0
                 to_remove.append(job)
-                job_finalization(job, memory, cpu_jobs, shuffle_jobs,
-                                 finished_jobs, io_jobs, waiting_jobs, current_second, config.materialization_fraction)
+                job_finalization(
+                    job,
+                    memory,
+                    cpu_jobs,
+                    shuffle_jobs,
+                    finished_jobs,
+                    io_jobs,
+                    waiting_jobs,
+                    current_second,
+                    config,
+                )
     
     for job in to_remove:
         cpu_jobs.remove(job)
@@ -478,7 +484,7 @@ def job_finalization(
     io_jobs: List[Job],
     waiting_jobs: List[Job],
     current_second: float,
-    materialization_fraction
+    config,
 ):
     """
     Finalizes a job after completion, removes it from active queues, adjusts memory and shuffle status,
@@ -498,7 +504,7 @@ def job_finalization(
         None
     """
     # 1. bookkeeping
-    memory[0] -= job.data_scanned * materialization_fraction
+    memory[0] -= job.data_scanned * config.materialization_fraction
     job.end_timestamp = current_second
 
     # per-phase times (seconds)
@@ -512,7 +518,9 @@ def job_finalization(
     T_sum = T_io + T_cpu + T_shuffle
     T_cpu_only = T_cpu
 
-    T_pm = (T_io**PM_P + T_cpu**PM_P + T_shuffle**PM_P)**(1.0/PM_P)
+    T_pm = (T_io**config.pm_p + T_cpu**config.pm_p + T_shuffle**config.pm_p) ** (
+        1.0 / config.pm_p
+    )
 
     T_mw = (
         max(0.8 * T_cpu, 0.2 * T_shuffle) +
@@ -530,12 +538,16 @@ def job_finalization(
     }
 
     # ---- choose official estimator and apply δ ----
-    chosen_key = DEFAULT_ESTIMATOR if DEFAULT_ESTIMATOR in job.estimators else "max"
-    chosen = job.estimators[chosen_key] + DELTA
+    chosen_key = (
+        config.default_estimator
+        if config.default_estimator in job.estimators
+        else "max"
+    )
+    chosen = job.estimators[chosen_key] + config.delta
     job.selected_estimator = chosen_key
 
     # ---- queue aggregation ----
-    if QUEUE_AGG == "max":
+    if config.queue_agg == "max":
         queue_total = max(job.queueing_delay, job.buffer_delay)
     else:  # default "sum"
         queue_total = job.queueing_delay + job.buffer_delay
@@ -693,8 +705,17 @@ def simulate_cpu_qaas(
                 job.cpu_time_progress = 0 
                 to_remove.append(job)
     
-                job_finalization(job, memory, cpu_jobs, shuffle_jobs,
-                finished_jobs, io_jobs, waiting_jobs, current_second, config.materialization_fraction)
+                job_finalization(
+                    job,
+                    memory,
+                    cpu_jobs,
+                    shuffle_jobs,
+                    finished_jobs,
+                    io_jobs,
+                    waiting_jobs,
+                    current_second,
+                    config,
+                )
     for job in to_remove:
         cpu_jobs.remove(job)
                 
