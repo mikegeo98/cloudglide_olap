@@ -69,9 +69,8 @@ export default function ArchitectureData() {
     }
 
     return (
-        <>
+        <div className="flex flex-col items-center gap-8">
             <h1>Architecture</h1>
-            <br />
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                     <div className="grid grid-cols-2 gap-3">
@@ -249,7 +248,6 @@ export default function ArchitectureData() {
                     <NextButton />
                 </form>
             </Form>
-            <br />
-        </>
+        </div>
     )
 }

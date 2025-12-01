@@ -37,11 +37,10 @@ export default function SystemParametersData() {
     }
 
     return (
-        <>
+        <div className="flex flex-col items-center gap-8">
             <h1>System Parameters (Optional)</h1>
-            <br />
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="w-[300px] space-y-6">
                     <FormField
                         control={form.control}
                         name="parallelizable_portion"
@@ -84,6 +83,6 @@ export default function SystemParametersData() {
                     <NextButton />
                 </form >
             </Form >
-        </>
+        </div>
     )
 }

@@ -5,9 +5,9 @@ import Selection from "./selection";
 
 async function getData(): Promise<{ data: Simulation[][], files: string[] }> {
     const sims: Simulation[][] = []
-    const files = await fs.readdir(process.cwd() + "../../cloudglide/output_simulation")
+    const files = await fs.readdir(process.cwd() + "/../cloudglide/output_simulation")
     for (const file of files) {
-        const content = await fs.readFile(process.cwd() + "../../cloudglide/output_simulation/" + file, "utf8");
+        const content = await fs.readFile(process.cwd() + "/../cloudglide/output_simulation/" + file, "utf8");
         const obj = csvJSON(content)
         sims.push(JSON.parse(obj))
     }

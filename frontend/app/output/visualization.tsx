@@ -29,7 +29,7 @@ export default function Visualization({ data }: { data: Simulation[][] }) {
                         <SelectGroup>
                             <SelectLabel>Fruits</SelectLabel>
                             {data.map((_, index) => (
-                                <SelectItem key={"select_" + index} value={index + ""}>simulation_{index}.csv</SelectItem>
+                                <SelectItem key={"select_" + index} value={index + ""}>simulation_{index + 1}.csv</SelectItem>
                             ))}
                         </SelectGroup>
                     </SelectContent>

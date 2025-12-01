@@ -70,11 +70,10 @@ export default function InputData() {
     }, [form])
 
     return (
-        <>
+        <div className="flex flex-col items-center gap-8">
             <h1>Input Data</h1>
-            <br />
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                     <FormField
                         control={form.control}
                         name="file"
@@ -155,7 +154,6 @@ export default function InputData() {
                     <NextButton />
                 </form>
             </Form >
-            <br />
-        </>
+        </div>
     )
 }

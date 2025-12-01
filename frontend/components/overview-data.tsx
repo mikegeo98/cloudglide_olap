@@ -6,6 +6,7 @@ import React from "react";
 import { ArrowLeft } from "lucide-react";
 import runSimulation from "@/lib/exec_shell_cmd";
 import { useRouter } from "next/navigation";
+import JsonViewer from "./json-viewer";
 
 export default function OverviewData() {
     const router = useRouter()
@@ -21,11 +22,9 @@ export default function OverviewData() {
     }
 
     return (
-        <>
+        <div className="flex flex-col items-center gap-8 max-w-screen w-[700px]">
             <h1>Overview</h1>
-            <br />
-            <p>{JSON.stringify(data)}</p>
-            <br />
+            <JsonViewer json={JSON.stringify(data, null, "\t")} />
             <div className="flex gap-3">
                 <Button variant="outline" size="icon" className="rounded-full" onClick={() => increaseStage(stage - 1)}>
                     <ArrowLeft />
@@ -34,6 +33,6 @@ export default function OverviewData() {
                     {loading ? <Spinner /> : "Run Simulation"}
                 </Button>
             </div>
-        </>
+        </div>
     )
 }
