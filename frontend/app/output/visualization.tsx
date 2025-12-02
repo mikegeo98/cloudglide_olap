@@ -20,6 +20,7 @@ export default function Visualization({ data }: { data: Simulation[][] }) {
 
     return (
         <>
+            <h1>Dashboard</h1>
             <div className="flex justify-start items-start w-full">
                 <Select defaultValue="0" onValueChange={(e) => setSim(Number.parseInt(e, 10))}>
                     <SelectTrigger className="w-[180px]">
@@ -27,7 +28,7 @@ export default function Visualization({ data }: { data: Simulation[][] }) {
                     </SelectTrigger>
                     <SelectContent>
                         <SelectGroup>
-                            <SelectLabel>Fruits</SelectLabel>
+                            <SelectLabel>Simulations</SelectLabel>
                             {data.map((_, index) => (
                                 <SelectItem key={"select_" + index} value={index + ""}>simulation_{index + 1}.csv</SelectItem>
                             ))}

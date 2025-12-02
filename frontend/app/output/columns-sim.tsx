@@ -76,6 +76,6 @@ export const columns: ColumnDef<Simulation>[] = [
     },
     {
         accessorKey: "mon_cost",
-        header: "Monthly Cost",
+        header: "Monetary Cost",
     },
 ]

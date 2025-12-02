@@ -19,7 +19,7 @@ export default async function OutputPage() {
 
     return (
         <div className="flex flex-col w-full min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-            <main className="flex min-h-screen flex-col w-full max-w-[1200px] items-center justify-center gap-6 p-20 bg-zinc-50 dark:bg-black">
+            <main className="flex min-h-screen flex-col w-full items-center justify-center gap-6 px-20 py-10 bg-zinc-50 dark:bg-black">
                 <Selection data={data} />
             </main>
         </div>

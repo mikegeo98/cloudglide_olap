@@ -12,17 +12,17 @@ import { notFound } from "next/navigation";
 import { Check } from "lucide-react";
 
 export default function Page() {
-  const { stage } = React.useContext(InputContext)
+  const { stage, increaseStage } = React.useContext(InputContext)
 
   return (
-    <div className="flex flex-col w-full min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <div className="fixed top-0 flex w-full max-w-7xl justify-evenly items-center py-4 m-0">
-        <p className={cn(stage === 0 ? "border-b-2 border-blue-700" : "", "m-0 w-1/5 text-center")}><b>1</b> - Input Data {stage > 0 ? <Check size={17} className="inline text-green-700" /> : null}</p>
-        <p className={cn(stage === 1 ? "border-b-2 border-blue-700" : stage < 1 ? "text-muted-foreground" : "", "m-0 w-1/5 text-center")}><b>2</b> - Architecture {stage > 1 ? <Check size={17} className="inline text-green-700" /> : null}</p>
-        <p className={cn(stage === 2 ? "border-b-2 border-blue-700" : stage < 2 ? "text-muted-foreground" : "", "m-0 w-1/5 text-center")}><b>3</b> - System Parameters {stage > 2 ? <Check size={17} className="inline text-green-700" /> : null}</p>
-        <p className={cn(stage === 3 ? "border-b-2 border-blue-700" : stage < 3 ? "text-muted-foreground" : "", "m-0 w-1/5 text-center")}><b>4</b> - Overview {stage > 3 ? <Check size={17} className="inline text-green-700" /> : null}</p>
+    <div className="flex flex-col w-full min-h-screen max-h-screen items-center justify-start bg-zinc-50 font-sans dark:bg-black">
+      <div className="flex w-full max-w-7xl justify-evenly items-center py-4 m-0 bg-zinc-50 font-sans dark:bg-black">
+        <button onClick={() => stage > 0 ? increaseStage(0) : null} className={cn(stage === 0 ? "border-b-2 border-blue-700" : "", "m-0 w-1/5 text-center")}><b>1</b> - Input Data {stage > 0 ? <Check size={17} className="inline text-green-700" /> : null}</button>
+        <button onClick={() => stage > 1 ? increaseStage(1) : null} className={cn(stage === 1 ? "border-b-2 border-blue-700" : stage < 1 ? "text-muted-foreground" : "", "m-0 w-1/5 text-center")}><b>2</b> - Architecture {stage > 1 ? <Check size={17} className="inline text-green-700" /> : null}</button>
+        <button onClick={() => stage > 2 ? increaseStage(2) : null} className={cn(stage === 2 ? "border-b-2 border-blue-700" : stage < 2 ? "text-muted-foreground" : "", "m-0 w-1/5 text-center")}><b>3</b> - System Parameters {stage > 2 ? <Check size={17} className="inline text-green-700" /> : null}</button>
+        <button onClick={() => stage > 3 ? increaseStage(3) : null} className={cn(stage === 3 ? "border-b-2 border-blue-700" : stage < 3 ? "text-muted-foreground" : "", "m-0 w-1/5 text-center")}><b>4</b> - Overview {stage > 3 ? <Check size={17} className="inline text-green-700" /> : null}</button>
       </div>
-      <main className="flex min-h-screen flex-col items-center justify-center py-32 px-16 bg-zinc-50 dark:bg-black">
+      <main className="flex-auto flex flex-col h-full max-h-full items-center justify-center overflow-hidden py-16 px-16 bg-zinc-50 dark:bg-black">
         <InnerPage stage={stage} />
       </main>
     </div>

@@ -18,7 +18,7 @@ export default function JsonViewer({ json }: { json: string }) {
     ]
 
     return (
-        <CodeBlock data={code} defaultValue={code[0].language}>
+        <CodeBlock className="max-h-full overflow-y-auto" data={code} defaultValue={code[0].language}>
             <CodeBlockBody>
                 {(item) => (
                     <CodeBlockItem key={item.language} value={item.language}>

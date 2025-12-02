@@ -19,19 +19,25 @@ export default function SystemParametersData() {
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
-        values: {
-            parallelizable_portion: data.parallelizable_portion,
-            materialization_fraction: data.materialization_fraction,
-            default_estimator: data.default_estimator,
+        defaultValues: {
+            parallelizable_portion: data.defaults.simulation.parallelizable_portion,
+            materialization_fraction: data.defaults.simulation.materialization_fraction,
+            default_estimator: data.defaults.simulation.default_estimator,
         }
     })
 
     function onSubmit(values: z.infer<typeof formSchema>) {
         setData({
             ...data,
-            parallelizable_portion: values.parallelizable_portion,
-            materialization_fraction: values.materialization_fraction,
-            default_estimator: values.default_estimator,
+            defaults: {
+                ...data.defaults,
+                simulation: {
+                    ...data.defaults.simulation,
+                    parallelizable_portion: values.parallelizable_portion,
+                    materialization_fraction: values.materialization_fraction,
+                    default_estimator: values.default_estimator,
+                },
+            },
         })
         increaseStage(stage + 1)
     }

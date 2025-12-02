@@ -28,10 +28,10 @@ import { z } from "zod";
 
 const formSchema = z.object({
     file: z.file().optional(),
-    dataset: z.string().optional(),
+    dataset: z.number().optional(),
 })
     .superRefine((data, ctx) => {
-        if (data.file === undefined && (data.dataset === undefined || data.dataset.length === 0)) {
+        if (data.file === undefined && (data.dataset === undefined || data.dataset === undefined)) {
             ctx.addIssue({
                 code: "custom",
                 message: "Either upload a CSV file or use an alternative",
@@ -46,23 +46,20 @@ export default function InputData() {
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
-        values: {
+        defaultValues: {
             file: data.input_csv,
-            dataset: data.default_csv?.name
+            dataset: data.dataset
         }
     })
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
-        if (values.dataset) {
-            const response = await fetch(values.dataset)
-            const resData = await response.blob()
-
-            setData({ ...data, input_csv: values.file ? values.file : undefined, default_csv: new File([resData], values.dataset, { type: ".csv" }) })
-        } else {
+        if (values.file) {
             setData({ ...data, input_csv: values.file ? values.file : undefined })
+        } else {
+            setData({ ...data, dataset: values.dataset ? values.dataset : undefined })
         }
 
-        increaseStage(stage + 2)
+        increaseStage(stage + 1)
     }
 
     React.useEffect(() => {
@@ -133,16 +130,16 @@ export default function InputData() {
                             <FormItem>
                                 <FormLabel>alternatively, select default trace</FormLabel>
                                 <FormControl>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <Select onValueChange={(e) => field.onChange(Number.parseInt(e))} defaultValue={field.value ? field.value + "" : undefined}>
                                         <SelectTrigger className="w-[180px]">
                                             <SelectValue placeholder="Dropdown" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectGroup>
                                                 <SelectLabel>Datasets</SelectLabel>
-                                                <SelectItem value="/concurrency.csv">Concurrency</SelectItem>
-                                                <SelectItem value="/tenk.csv">Tenk</SelectItem>
-                                                <SelectItem value="/tpch_all_runs.csv">TPC_H all runs</SelectItem>
+                                                <SelectItem value="998">Concurrency</SelectItem>
+                                                <SelectItem value="22">Tenk</SelectItem>
+                                                <SelectItem value="999">TPC_H all runs</SelectItem>
                                             </SelectGroup>
                                         </SelectContent>
                                     </Select>
