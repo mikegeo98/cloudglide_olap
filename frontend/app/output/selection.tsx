@@ -19,14 +19,10 @@ export default function Selection({ data }: { data: { data: Simulation[][], file
     }
 
     if (visualize) {
-        return (
-            <>
-                <Visualization data={visualizedData} />
-            </>
-        )
+        return <Visualization data={visualizedData} />
     } else {
         return (
-            <>
+            <div className="flex flex-col gap-6 items-center">
                 <DataTable className="w-[500px]" columns={columns} data={
                     data.files.map(f => {
                         return { filename: f } as SimRun
@@ -35,7 +31,7 @@ export default function Selection({ data }: { data: { data: Simulation[][], file
                 <Button disabled={Object.keys(rowSelection).length === 0} variant="outline" className="bg-foreground text-background w-[180px]" onClick={handleVisualize}>
                     Visualize
                 </Button>
-            </>
+            </div>
         )
     }
 }

@@ -10,12 +10,12 @@ import JsonViewer from "./json-viewer";
 
 export default function OverviewData() {
     const router = useRouter()
-    const { stage, increaseStage, dataToJson } = React.useContext(InputContext)
+    const { stage, increaseStage, data, dataToJson } = React.useContext(InputContext)
     const [loading, setLoading] = React.useState(false)
 
     function handleRunSimulation() {
         setLoading(true)
-        runSimulation(dataToJson())
+        runSimulation(data.input_csv, dataToJson())
             .then(() => {
                 router.push("/output")
             })

@@ -18,8 +18,8 @@ export default async function OutputPage() {
     const data = await getData()
 
     return (
-        <div className="flex flex-col w-full min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-            <main className="flex min-h-screen flex-col w-full items-center justify-center gap-6 px-20 py-10 bg-zinc-50 dark:bg-black">
+        <div className="flex flex-col w-full min-h-screen max-h-screen items-center justify-start bg-zinc-50 font-sans dark:bg-black">
+            <main className="flex-auto flex flex-col h-full max-h-full w-full items-center justify-center overflow-hidden py-16 px-16 bg-zinc-50 dark:bg-black">
                 <Selection data={data} />
             </main>
         </div>

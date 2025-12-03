@@ -6,10 +6,17 @@ import fs from "fs";
 
 const exec = util.promisify(child_process.exec);
 
-export default async function runSimulation(input_json: string) {
+export default async function runSimulation(input_csv: File | undefined, input_json: string) {
+    // Store uploaded csv file
+    if (input_csv) {
+        fs.writeFileSync("../cloudglide/datasets/custom.csv", await input_csv.text())
+    }
+
+    // Save input.json file in simulations folder
     const path = "cloudglide/simulations/custom.json"
     fs.writeFileSync("../" + path, input_json) // starting point of this call is frontend/
 
+    // Execute the recently saved input.json file
     const architecture = JSON.parse(input_json).scenarios[0].name
     const { stdout, stderr } = await exec("cd .. && python main.py " + architecture + " " + path)
     console.log("stdout:", stdout)

@@ -199,8 +199,8 @@ export default function ArchitectureData() {
                                         <Select defaultValue={field.value?.policy} onValueChange={(e) => {
                                             field.onChange({
                                                 policy: e,
-                                                max_io_concurrency: 0,
-                                                max_cpu_concurrency: 0,
+                                                max_io_concurrency: 16,
+                                                max_cpu_concurrency: 16,
                                             })
                                         }}>
                                             <SelectTrigger className="w-full">

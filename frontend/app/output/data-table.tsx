@@ -66,7 +66,7 @@ export function DataTable<TData, TValue>({
   })
 
   return (
-    <div className={cn(className, "overflow-hidden rounded-md border")}>
+    <div className={cn(className, "rounded-md border")}>
       <Table>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (

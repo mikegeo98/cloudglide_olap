@@ -321,5 +321,6 @@ DATASET_FILES = {
     997: "cloudglide/datasets/biggo_edited.csv",
     998: "cloudglide/datasets/concurrency.csv",
     999: "cloudglide/datasets/tpch_all_runs.csv",
+    1001: "cloudglide/datasets/custom.csv",
 }
 
