@@ -1,0 +1,238 @@
+{
+  "defaults": {
+    "simulation": {
+      "scale_factor_min": 1,
+      "scale_factor_max": 100,
+      "shuffle_percentage_min": 0.1,
+      "shuffle_percentage_max": 0.35,
+      "interrupt_probability": 0.01,
+      "interrupt_duration": 6000,
+      "logging_interval": 60,
+      "default_max_duration": 108000,
+      "default_estimator": "pm",
+      "pm_p": 4.0,
+      "delta": 0.3,
+      "queue_agg": "sum",
+      "materialization_fraction": 0.25,
+      "parallelizable_portion": 0.9,
+      "s3_bandwidth": 1000
+    },
+    "dwaas": {
+      "cost_per_second_redshift": 0.00030166666,
+      "spot_discount": 0.5,
+      "use_spot_instances": false,
+      "cold_start_delay": 60.0
+    },
+    "ep": {
+      "cost_per_rpu_hour": 0.375,
+      "cache_warmup_gamma": 0.05,
+      "cold_start_delay": 120.0
+    },
+    "qaas": {
+      "cost_per_slot_hour": 0.04,
+      "qaas_cost_per_tb": 5.0,
+      "qaas_io_per_core_bw": 150,
+      "qaas_shuffle_bw_per_core": 50,
+      "qaas_base_cores": 4,
+      "qaas_base_time_limit": 2,
+      "core_alloc_window": 10.0
+    },
+    "scheduling": {
+      "policy": "fcfs",
+      "max_io_concurrency": 64,
+      "max_cpu_concurrency": 64,
+      "multi_level_queues": []
+    },
+    "scaling": {
+      "policy": "queue",
+      "queue": {
+        "length_thresholds": [5, 10, 15, 20],
+        "scale_steps": [4, 8, 12, 16],
+        "scale_in_utilization": 0.4,
+        "scale_in_step": 4
+      },
+      "reactive": {
+        "cpu_utilization_thresholds": [0.6, 0.7, 0.8],
+        "scale_steps": [8, 16, 24],
+        "scale_in_utilization": 0.1,
+        "scale_in_step": 8
+      },
+      "predictive": {
+        "growth_factor": 1.2,
+        "decline_factor": 0.75,
+        "history": 3,
+        "observation_interval": 10000,
+        "scale_step": 4
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "name": "dwaas_static",
+      "description": "Traditional static DWaaS with fixed cluster size (no autoscaling)",
+      "architecture": "DWAAS",
+      "dataset": 999,
+      "nodes": 4,
+      "instance": 0,
+      "hit_rate": 0.7,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 650,
+      "memory_bandwidth": 40000,
+      "total_memory_capacity_mb": 128000,
+      "runs": [
+        {
+          "name": "dwaas_fcfs",
+          "scheduling": {
+            "policy": "fcfs",
+            "max_io_concurrency": 32,
+            "max_cpu_concurrency": 32
+          }
+        }
+      ]
+    },
+    {
+      "name": "dwaas_autoscaling",
+      "description": "DWaaS with autoscaling enabled - scales nodes based on workload",
+      "architecture": "DWAAS_AUTOSCALING",
+      "dataset": 999,
+      "nodes": 2,
+      "instance": 0,
+      "hit_rate": 0.7,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 650,
+      "memory_bandwidth": 40000,
+      "total_memory_capacity_mb": 64000,
+      "cold_start": 60.0,
+      "runs": [
+        {
+          "name": "dwaas_queue_scaling",
+          "description": "Scale based on queue length",
+          "scheduling": {
+            "policy": "sjf",
+            "max_io_concurrency": 32,
+            "max_cpu_concurrency": 32
+          },
+          "scaling": {
+            "policy": "queue",
+            "queue": {
+              "length_thresholds": [5, 10, 15, 20],
+              "scale_steps": [4, 8, 12, 16],
+              "scale_in_utilization": 0.4,
+              "scale_in_step": 4
+            }
+          }
+        },
+        {
+          "name": "dwaas_reactive_scaling",
+          "description": "Scale based on CPU utilization",
+          "scheduling": {
+            "policy": "fcfs"
+          },
+          "scaling": {
+            "policy": "reactive",
+            "reactive": {
+              "cpu_utilization_thresholds": [0.6, 0.7, 0.8],
+              "scale_steps": [8, 16, 24],
+              "scale_in_utilization": 0.2,
+              "scale_in_step": 8
+            }
+          }
+        },
+        {
+          "name": "dwaas_predictive_scaling",
+          "description": "Scale based on predicted workload patterns",
+          "scaling": {
+            "policy": "predictive",
+            "predictive": {
+              "growth_factor": 1.2,
+              "decline_factor": 0.75,
+              "history": 3,
+              "observation_interval": 10000,
+              "scale_step": 4
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "elastic_pool",
+      "description": "Elastic Pool (RPU-based) with VPU autoscaling",
+      "architecture": "ELASTIC_POOL",
+      "dataset": 999,
+      "vpu": 16,
+      "nodes": 1,
+      "hit_rate": 0.8,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 1200,
+      "memory_bandwidth": 40000,
+      "total_memory_capacity_mb": 96000,
+      "cold_start": 120.0,
+      "runs": [
+        {
+          "name": "ep_queue_scaling",
+          "description": "Scale VPUs based on queue length",
+          "scheduling": {
+            "policy": "fcfs",
+            "max_io_concurrency": 32,
+            "max_cpu_concurrency": 32
+          },
+          "scaling": {
+            "policy": "queue",
+            "queue": {
+              "length_thresholds": [10, 20, 30],
+              "scale_steps": [8, 16, 24],
+              "scale_in_utilization": 0.3,
+              "scale_in_step": 8
+            }
+          }
+        },
+        {
+          "name": "ep_reactive_scaling",
+          "description": "Scale VPUs based on CPU utilization",
+          "scaling": {
+            "policy": "reactive",
+            "reactive": {
+              "cpu_utilization_thresholds": [0.7, 0.8, 0.9],
+              "scale_steps": [8, 16, 24],
+              "scale_in_utilization": 0.25,
+              "scale_in_step": 8
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "qaas",
+      "description": "Query-as-a-Service (pay-per-query model, auto-scaling cores per query)",
+      "architecture": "QAAS",
+      "dataset": 999,
+      "nodes": 0,
+      "vpu": 0,
+      "hit_rate": 0.0,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 0,
+      "memory_bandwidth": 0,
+      "total_memory_capacity_mb": 0,
+      "runs": [
+        {
+          "name": "qaas_fcfs_ondemand",
+          "description": "Pay-per-query with on-demand pricing",
+          "scheduling": {
+            "policy": "fcfs",
+            "max_io_concurrency": 64,
+            "max_cpu_concurrency": 64
+          }
+        },
+        {
+          "name": "qaas_sjf_ondemand",
+          "description": "Shortest job first for better throughput",
+          "scheduling": {
+            "policy": "sjf",
+            "max_io_concurrency": 64,
+            "max_cpu_concurrency": 64
+          }
+        }
+      ]
+    }
+  ]
+}

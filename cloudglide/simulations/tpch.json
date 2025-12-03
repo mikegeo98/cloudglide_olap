@@ -3,11 +3,6 @@
     "simulation": {
       "interrupt_probability": 0.01,
       "interrupt_duration": 6000,
-      "spot_discount": 0.5,
-      "cost_per_second_redshift": 0.00030166666,
-      "cost_per_rpu_hour": 0.375,
-      "cost_per_slot_hour": 0.04,
-      "qaas_cost_per_tb": 5.0,
       "logging_interval": 60,
       "default_max_duration": 108000,
       "default_estimator": "pm",
@@ -16,14 +11,26 @@
       "queue_agg": "sum",
       "materialization_fraction": 0.25,
       "parallelizable_portion": 0.9,
-      "cold_start_delay": 60.0,
+      "s3_bandwidth": 1000
+    },
+    "dwaas": {
+      "cost_per_second_redshift": 0.00030166666,
+      "spot_discount": 0.5,
+      "cold_start_delay": 60.0
+    },
+    "ep": {
+      "cost_per_rpu_hour": 0.375,
       "cache_warmup_gamma": 0.05,
+      "cold_start_delay": 120.0
+    },
+    "qaas": {
+      "cost_per_slot_hour": 0.04,
+      "qaas_cost_per_tb": 5.0,
       "qaas_io_per_core_bw": 150,
       "qaas_shuffle_bw_per_core": 50,
       "qaas_base_cores": 4,
       "qaas_base_time_limit": 2,
-      "core_alloc_window": 10.0,
-      "s3_bandwidth": 1000
+      "core_alloc_window": 10.0
     },
     "scheduling": {
       "policy": "fcfs",
@@ -59,15 +66,15 @@
       "name": "tpch_all",
       "architecture": "QAAS",
       "dataset": 999,
-      "nodes": 2,
-      "vpu": 8,
-      "hit_rate": 0.7,
+      "nodes": 0,
+      "vpu": 0,
+      "hit_rate": 0.0,
       "instance": 0,
-      "arrival_rate": 0.1,
-      "network_bandwidth": 10,
-      "io_bandwidth": 1500,
-      "memory_bandwidth": 1,
-      "cold_start": 180,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 0,
+      "memory_bandwidth": 0,
+      "total_memory_capacity_mb": 0,
+      "cold_start": 0,
       "runs": [
         {
           "name": "tpch_fcfs_base",
@@ -161,7 +168,6 @@
       "nodes": 2,
       "hit_rate": 1.0,
       "instance": 0,
-      "arrival_rate": 0.1,
       "network_bandwidth": 10,
       "io_bandwidth": 1,
       "memory_bandwidth": 1,
@@ -191,7 +197,6 @@
       "nodes": 16,
       "hit_rate": 1.0,
       "instance": 1,
-      "arrival_rate": 0.1,
       "network_bandwidth": 10,
       "io_bandwidth": 1,
       "memory_bandwidth": 1,

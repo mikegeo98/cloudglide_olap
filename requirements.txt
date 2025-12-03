@@ -12,6 +12,9 @@ adjustText>=1.1.1
 # System Monitoring
 psutil>=5.8.0
 
+# Validation
+jsonschema>=4.0.0
+
 # Standard Library Dependencies (included for completeness, typically pre-installed)
 # The following are part of Python's standard library but listed for documentation:
 # sys, os, json, logging, collections, dataclasses, typing, enum

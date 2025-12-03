@@ -172,10 +172,15 @@ def simulate_io(
                 job.io_time += finish_delta
                 job.data_scanned_progress = 0
         return
-    
+
     # ----------------------------
     # Phase 1: Memory Tier Assignment
     # ----------------------------
+    # Update DRAM node distribution BEFORE processing jobs
+    if architecture in [ArchitectureType.DWAAS, ArchitectureType.DWAAS_AUTOSCALING]:
+        dram_nodes, dram_job_counts = update_dram_nodes(
+            dram_nodes, dram_job_counts, num_nodes)
+
     new_jobs = []
     for job in list(io_jobs):
         jid = job.job_id
@@ -188,11 +193,6 @@ def simulate_io(
                 dram_nodes[idx].append(job)
                 dram_job_counts[idx] += 1
         new_jobs.append((job, job_memory_tiers[jid]))
-
-    # Pre-calc DRAM node distribution if cached
-    if architecture in [ArchitectureType.DWAAS, ArchitectureType.DWAAS_AUTOSCALING]:
-        dram_nodes, dram_job_counts = update_dram_nodes(
-            dram_nodes, dram_job_counts, num_nodes)
         
 
     # ----------------------------
@@ -315,7 +315,7 @@ def schedule_event(job: Job, timestamp: float, event_type: str, events: List[Eve
         # Remove stale duplicates for the same (job_id, event_type)
         events[:] = [
             e for e in events
-            if not (e.job.job_id == job.job_id and e.etype == event_type)
+            if not (e.job and e.job.job_id == job.job_id and e.etype == event_type)
         ]
         heapq.heapify(events)
 

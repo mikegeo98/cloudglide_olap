@@ -6,8 +6,12 @@ import os
 import psutil
 from cloudglide.execution_model import schedule_jobs
 from typing import List, Tuple
-from cloudglide.config import DATASET_FILES, ArchitectureType, SimulationConfig
 from cloudglide.config import (
+    DATASET_FILES,
+    ArchitectureType,
+    SimulationConfig,
+    ExecutionParams,
+    SimulationParams,
     INSTANCE_TYPES,
 )
 
@@ -41,11 +45,10 @@ def configure_execution_params(
     cold_start: bool,
     hit_rate: float,
     instance: int,
-    arrival_rate: float,
     network_bandwidth: int,
     io_bandwidth: int,
     memory_bandwidth: int
-) -> List:
+) -> ExecutionParams:
     """
     Configure execution parameters based on the architecture type.
     """
@@ -58,21 +61,21 @@ def configure_execution_params(
         network_bw = config["network_bandwidth"]
 
         max_jobs = cpu_cores
-        vpu = 0  # Virtual Processing Unit not used in this architecture
-        execution_params = [
-            scheduling,
-            scaling,
-            nodes,
-            cpu_cores,
-            io_bw,
-            max_jobs,
-            vpu,
-            network_bw,
-            memory_bw,
-            memory,
-            cold_start,
-            hit_rate
-        ]
+        vpu_param = 0  # Virtual Processing Unit not used in this architecture
+        return ExecutionParams(
+            scheduling=scheduling,
+            scaling=scaling,
+            nodes=nodes,
+            cpu_cores=cpu_cores,
+            io_bw=io_bw,
+            max_jobs=max_jobs,
+            vpu=vpu_param,
+            network_bw=network_bw,
+            memory_bw=memory_bw,
+            total_memory_capacity_mb=memory,
+            cold_start=cold_start,
+            hit_rate=hit_rate
+        )
 
     elif architecture == 2:
         max_jobs = 100
@@ -81,56 +84,51 @@ def configure_execution_params(
         network_bw = network_bandwidth * 1000
         memory_bw = 50000
         io_bw = int(io_bandwidth * vpu / 4)  # Scale based on VPUs
-        execution_params = [
-            scheduling,
-            scaling,
-            cpu_cores,
-            cpu_cores,
-            io_bw,
-            max_jobs,
-            vpu,
-            network_bw,
-            memory_bw,
-            memory,
-            cold_start,
-            hit_rate
-        ]
+        return ExecutionParams(
+            scheduling=scheduling,
+            scaling=scaling,
+            nodes=cpu_cores,
+            cpu_cores=cpu_cores,
+            io_bw=io_bw,
+            max_jobs=max_jobs,
+            vpu=vpu,
+            network_bw=network_bw,
+            memory_bw=memory_bw,
+            total_memory_capacity_mb=memory,
+            cold_start=cold_start,
+            hit_rate=hit_rate
+        )
 
     else:
         max_jobs = 100000
         cpu_cores = 0
         memory = 0
         io_bw = 0
-        vpu = 0
+        vpu_param = 0
         network_bw = network_bandwidth * 1000
         memory_bw = 50000
-        execution_params = [
-            scheduling,
-            scaling,
-            0,
-            0,
-            0,
-            max_jobs,
-            0,
-            network_bw,
-            memory_bw,
-            memory,
-            cold_start,
-            hit_rate
-        ]
-
-    return execution_params
+        return ExecutionParams(
+            scheduling=scheduling,
+            scaling=scaling,
+            nodes=0,
+            cpu_cores=0,
+            io_bw=0,
+            max_jobs=max_jobs,
+            vpu=vpu_param,
+            network_bw=network_bw,
+            memory_bw=memory_bw,
+            total_memory_capacity_mb=memory,
+            cold_start=cold_start,
+            hit_rate=hit_rate
+        )
 
 
-def configure_simulation_params(ds_idx: int, config) -> List:
+def configure_simulation_params(ds_idx: int, config) -> SimulationParams:
     """
     Configure simulation parameters based on the dataset index.
     """
     dataset = DATASET_FILES.get(ds_idx, 'datasets/test.csv')
-    sleep_time = config.default_sleep_time
-    max_duration = config.default_max_duration  # in seconds
-    logging_flag = 0
-    return [dataset, sleep_time, max_duration, logging_flag]
+    return SimulationParams(dataset_path=dataset)
 
 
 
@@ -145,7 +143,6 @@ class SimulationRun:
     cold_start: float
     hit_rate: float
     instance: int
-    arrival_rate: float
     network_bandwidth: int
     io_bandwidth: int
     memory_bandwidth: int
@@ -176,13 +173,12 @@ def run_simulation(
         cs = run.cold_start
         hr = run.hit_rate
         inst = run.instance
-        ar = run.arrival_rate
         nb = run.network_bandwidth
         iob = run.io_bandwidth
         mb = run.memory_bandwidth
         ds_idx = run.dataset_index
         exec_params = configure_execution_params(
-            arch, sched, node, v, sc, cs, hr, inst, ar, nb, iob, mb)
+            arch, sched, node, v, sc, cs, hr, inst, nb, iob, mb)
         sim_params = configure_simulation_params(ds_idx, config)
 
         output_file_path = f"{output_prefix}_{file_counter}.csv"
@@ -192,7 +188,7 @@ def run_simulation(
         logging.info(
             f"---------EXECUTION ({run.name})---------\n"
             f"Architecture: {arch}, Scheduling: {sched}, Nodes: {node}, VPU: {v}, Scaling: {sc}, "
-            f"Cold Starts: {cs}, Hit Rate: {hr}, Instance: {inst}, Arrival Rate: {ar}, "
+            f"Cold Starts: {cs}, Hit Rate: {hr}, Instance: {inst}, "
             f"Network Bandwidth: {nb}, I/O Bandwidth: {iob}, Memory Bandwidth: {mb}, Dataset: {ds_idx}"
         )
 

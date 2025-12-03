@@ -32,6 +32,35 @@ class InstanceConfig:
     memory_bandwidth: int  # in Mbps
 
 
+@dataclass
+class ExecutionParams:
+    """
+    Structured parameters for simulation execution.
+    Replaces fragile tuple unpacking with type-safe dataclass.
+    """
+    scheduling: int
+    scaling: int
+    nodes: int
+    cpu_cores: int
+    io_bw: int
+    max_jobs: int
+    vpu: int
+    network_bw: int
+    memory_bw: int
+    total_memory_capacity_mb: int
+    cold_start: float
+    hit_rate: float
+
+
+@dataclass
+class SimulationParams:
+    """
+    Parameters for simulation initialization.
+    """
+    dataset_path: str
+    output_file: str = ""
+
+
 # Define all instance types
 INSTANCE_TYPES: List[InstanceConfig] = [
     InstanceConfig(cpu_cores=4, memory=32, io_bandwidth=650, network_bandwidth=1000, memory_bandwidth=40000),   # ra3.xlplus
@@ -124,6 +153,102 @@ class SimulationConfig:
 
     scheduling_options: Dict[str, Any] = field(default_factory=_default_scheduling_options)
     scaling_options: Dict[str, Any] = field(default_factory=_default_scaling_options)
+
+    def __post_init__(self):
+        """Validate configuration parameters after initialization."""
+        errors = []
+
+        # Validate probability values [0, 1]
+        if not 0 <= self.interrupt_probability <= 1:
+            errors.append(
+                f"interrupt_probability must be in [0, 1], got {self.interrupt_probability}"
+            )
+        if not 0 <= self.spot_discount <= 1:
+            errors.append(
+                f"spot_discount must be in [0, 1], got {self.spot_discount}"
+            )
+        if not 0 <= self.materialization_fraction <= 1:
+            errors.append(
+                f"materialization_fraction must be in [0, 1], got {self.materialization_fraction}"
+            )
+        if not 0 <= self.parallelizable_portion <= 1:
+            errors.append(
+                f"parallelizable_portion must be in [0, 1], got {self.parallelizable_portion}"
+            )
+        if not 0 <= self.shuffle_percentage_min <= 1:
+            errors.append(
+                f"shuffle_percentage_min must be in [0, 1], got {self.shuffle_percentage_min}"
+            )
+        if not 0 <= self.shuffle_percentage_max <= 1:
+            errors.append(
+                f"shuffle_percentage_max must be in [0, 1], got {self.shuffle_percentage_max}"
+            )
+
+        # Validate positive values
+        if self.cold_start_delay < 0:
+            errors.append(
+                f"cold_start_delay must be non-negative, got {self.cold_start_delay}"
+            )
+        if self.cache_warmup_gamma < 0:
+            errors.append(
+                f"cache_warmup_gamma must be non-negative, got {self.cache_warmup_gamma}"
+            )
+        if self.logging_interval <= 0:
+            errors.append(
+                f"logging_interval must be positive, got {self.logging_interval}"
+            )
+        if self.cost_per_second_redshift < 0:
+            errors.append(
+                f"cost_per_second_redshift must be non-negative, got {self.cost_per_second_redshift}"
+            )
+        if self.cost_per_rpu_hour < 0:
+            errors.append(
+                f"cost_per_rpu_hour must be non-negative, got {self.cost_per_rpu_hour}"
+            )
+        if self.cost_per_slot_hour < 0:
+            errors.append(
+                f"cost_per_slot_hour must be non-negative, got {self.cost_per_slot_hour}"
+            )
+        if self.qaas_cost_per_tb < 0:
+            errors.append(
+                f"qaas_cost_per_tb must be non-negative, got {self.qaas_cost_per_tb}"
+            )
+
+        # Validate scale factor range
+        if self.scale_factor_min < 1:
+            errors.append(
+                f"scale_factor_min must be >= 1, got {self.scale_factor_min}"
+            )
+        if self.scale_factor_max < self.scale_factor_min:
+            errors.append(
+                f"scale_factor_max ({self.scale_factor_max}) must be >= scale_factor_min ({self.scale_factor_min})"
+            )
+
+        # Validate shuffle percentage range
+        if self.shuffle_percentage_max < self.shuffle_percentage_min:
+            errors.append(
+                f"shuffle_percentage_max ({self.shuffle_percentage_max}) must be >= shuffle_percentage_min ({self.shuffle_percentage_min})"
+            )
+
+        # Validate estimator
+        valid_estimators = ["max", "sum", "cpu_only", "pm", "mw"]
+        if self.default_estimator not in valid_estimators:
+            errors.append(
+                f"default_estimator must be one of {valid_estimators}, got '{self.default_estimator}'"
+            )
+
+        # Validate queue aggregation
+        valid_queue_agg = ["max", "sum"]
+        if self.queue_agg not in valid_queue_agg:
+            errors.append(
+                f"queue_agg must be one of {valid_queue_agg}, got '{self.queue_agg}'"
+            )
+
+        if errors:
+            raise ValueError(
+                "SimulationConfig validation failed:\n" +
+                "\n".join(f"  - {error}" for error in errors)
+            )
 
     def copy(self) -> "SimulationConfig":
         clone = deepcopy(self)

@@ -3,7 +3,7 @@ import math
 import logging
 import random
 from collections import deque
-from typing import List
+from typing import List, Dict, Tuple, Any
 import numpy as np
 import pandas as pd
 
@@ -18,22 +18,50 @@ from cloudglide.scheduling_model import io_scheduler, cpu_scheduler
 from cloudglide.query_processing_model import simulate_io, simulate_cpu
 from cloudglide.visual_model import load_jobs_from_csv, write_to_csv
 from cloudglide.job import Job
-from cloudglide.config import ArchitectureType, SimulationConfig
+from cloudglide.config import ArchitectureType, SimulationConfig, ExecutionParams, SimulationParams
 from cloudglide.interrupt_model import handle_interrupt
 
 # ----------------------------
 # Initialization Helpers
 # ----------------------------
 
-def initialize_state(architecture: int, execution_params: List, simulation_params: List, config):
-    (
-        scheduling, scaling, nodes, cpu_cores, io_bw, max_jobs, vpu,
-        network_bw, memory_bw, total_memory_capacity_mb, cold_start, hit_rate
-    ) = execution_params
+
+def initialize_state(
+    architecture: int,
+    execution_params: ExecutionParams,
+    simulation_params: SimulationParams,
+    config: SimulationConfig
+):
+    """
+    Initialize simulation state with structured parameters.
+
+    Args:
+        architecture: Architecture type identifier
+        execution_params: Structured execution parameters
+        simulation_params: Structured simulation parameters
+        config: Simulation configuration
+
+    Returns:
+        Tuple of initialized state components
+    """
+    scheduling = execution_params.scheduling
+    scaling = execution_params.scaling
+    nodes = execution_params.nodes
+    cpu_cores = execution_params.cpu_cores
+    io_bw = execution_params.io_bw
+    vpu = execution_params.vpu
+    network_bw = execution_params.network_bw
+    memory_bw = execution_params.memory_bw
+    total_memory_capacity_mb = execution_params.total_memory_capacity_mb
+    cold_start = execution_params.cold_start
+    hit_rate = execution_params.hit_rate
 
     autoscaler = (
         Autoscaler(cold_start, config.scaling_options)
-        if architecture in [ArchitectureType.DWAAS_AUTOSCALING, ArchitectureType.ELASTIC_POOL]
+        if architecture in [
+            ArchitectureType.DWAAS_AUTOSCALING,
+            ArchitectureType.ELASTIC_POOL
+        ]
         else None
     )
     state = {
@@ -58,7 +86,10 @@ def initialize_state(architecture: int, execution_params: List, simulation_param
     }
 
     # Initial cost model
-    if architecture in [ArchitectureType.DWAAS, ArchitectureType.DWAAS_AUTOSCALING]:
+    if architecture in [
+        ArchitectureType.DWAAS,
+        ArchitectureType.DWAAS_AUTOSCALING
+    ]:
         cpu_cores_per_node = cpu_cores // nodes
         cost_per_sec_usd = redshift_persecond_cost(cpu_cores / nodes)
     elif architecture == ArchitectureType.ELASTIC_POOL:
@@ -69,15 +100,21 @@ def initialize_state(architecture: int, execution_params: List, simulation_param
         cost_per_sec_usd = config.cost_per_second_redshift
 
     # Load jobs from CSV
-    jobs, workload_data_scanned_mb = load_jobs_from_csv(simulation_params[0])
+    jobs, workload_data_scanned_mb = load_jobs_from_csv(
+        simulation_params.dataset_path
+    )
 
     # Seed arrival events
-    events = [Event(job.start, next_event_counter(), job, "arrival") for job in jobs]
+    events = [
+        Event(job.start, next_event_counter(), job, "arrival")
+        for job in jobs
+    ]
     heapq.heapify(events)
 
     return (
-        state, autoscaler, jobs, workload_data_scanned_mb, cpu_cores_per_node,
-        cost_per_sec_usd, nodes, cpu_cores, io_bw, vpu, network_bw, memory_bw, total_memory_capacity_mb,
+        state, autoscaler, jobs, workload_data_scanned_mb,
+        cpu_cores_per_node, cost_per_sec_usd, nodes, cpu_cores, io_bw,
+        vpu, network_bw, memory_bw, total_memory_capacity_mb,
         scaling, scheduling, hit_rate, cold_start, events
     )
 
@@ -86,12 +123,49 @@ def initialize_state(architecture: int, execution_params: List, simulation_param
 # Core Logic
 # ----------------------------
 
-def charge_costs(state, architecture, dt, nodes, base_n, cost_per_sec_usd, vpu, slots, spot, interrupt):
-    if architecture not in [ArchitectureType.QAAS, ArchitectureType.QAAS_CAPACITY]:  # QaaS handled separately
-        state["accumulated_cost_usd"], state["vpu_charge"], state["accumulated_slot_hours"] = cost_calculator(
-            dt, architecture, state["accumulated_cost_usd"], nodes, base_n, cost_per_sec_usd,
-            vpu, state["vpu_charge"], spot, interrupt, slots, state["accumulated_slot_hours"]
+
+def charge_costs(
+    state: Dict,
+    architecture: int,
+    dt: float,
+    nodes: int,
+    base_n: int,
+    cost_per_sec_usd: float,
+    vpu: int,
+    slots: int,
+    spot: int,
+    interrupt: int
+) -> None:
+    """
+    Calculate and accumulate costs for the current timestep.
+
+    Args:
+        state: Simulation state dictionary
+        architecture: Architecture type
+        dt: Time delta for this step
+        nodes: Current number of nodes
+        base_n: Base number of nodes
+        cost_per_sec_usd: Cost per second in USD
+        vpu: Virtual processing units
+        slots: Number of slots
+        spot: Spot instance flag (0 or 1)
+        interrupt: Interrupt flag (0 or 1)
+    """
+    # QaaS handled separately
+    if architecture not in [
+        ArchitectureType.QAAS,
+        ArchitectureType.QAAS_CAPACITY
+    ]:
+        result = cost_calculator(
+            dt, architecture, state["accumulated_cost_usd"], nodes,
+            base_n, cost_per_sec_usd, vpu, state["vpu_charge"],
+            spot, interrupt, slots, state["accumulated_slot_hours"]
         )
+        (
+            state["accumulated_cost_usd"],
+            state["vpu_charge"],
+            state["accumulated_slot_hours"]
+        ) = result
 
 
 def maybe_autoscale(architecture, autoscaler, scaling, state, nodes, cpu_cores_per_node,
@@ -148,6 +222,24 @@ def maybe_interrupt(state, jobs, current_second, spot, config):
 # ----------------------------
 # Finalization
 # ----------------------------
+def _default_metrics(total_price: float) -> Dict[str, Any]:
+    """Return default metrics when no jobs finished."""
+    return {
+        "average_queueing_delay": 0.0,
+        "average_buffer_delay": 0.0,
+        "average_io": 0.0,
+        "average_cpu": 0.0,
+        "average_shuffle": 0.0,
+        "average_query_latency": 0.0,
+        "median_query_latency": 0.0,
+        "percentile_95_query_latency": 0.0,
+        "average_query_wq_latency": 0.0,
+        "median_query_wq_latency": 0.0,
+        "percentile_95_query_wq_latency": 0.0,
+        "total_price": total_price
+    }
+
+
 def collect_metrics(output_file: str, finished_jobs: List[Job], total_price: float):
     """
     Finalize the simulation by writing results to CSV, reading them back,
@@ -160,12 +252,15 @@ def collect_metrics(output_file: str, finished_jobs: List[Job], total_price: flo
     # Load results
     try:
         df = pd.read_csv(output_file)
+        if df.empty:
+            logging.warning(f"Output file '{output_file}' is empty - no finished jobs.")
+            return _default_metrics(total_price)
     except FileNotFoundError:
         logging.error(f"Output file '{output_file}' not found.")
-        return {}
+        return _default_metrics(total_price)
     except Exception as e:
         logging.error(f"Error reading output file '{output_file}': {e}")
-        return {}
+        return _default_metrics(total_price)
 
     # Compute all metrics (preserve your original ones)
     metrics = {

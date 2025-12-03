@@ -9,6 +9,11 @@ import numpy as np
 import matplotlib.cm as cm
 import logging
 from cloudglide.job import Job
+from cloudglide.validation import (
+    validate_csv_schema,
+    validate_csv_data,
+    CSVValidationError
+)
 from collections import deque
 from typing import List, Tuple, Optional
 from dataclasses import dataclass, asdict
@@ -20,30 +25,47 @@ logging.basicConfig(
 )
 
 def load_jobs_from_csv(path: str, max_rows: Optional[int] = None) -> Tuple[deque[Job], float]:
+    """
+    Load jobs from CSV file with validation.
 
-    required_columns = {
-        "database_id", "query_id", "start",
-        "cpu_time", "data_scanned", "scale_factor"
-    }
+    Args:
+        path: Path to CSV file
+        max_rows: Maximum number of rows to load (None for all)
 
+    Returns:
+        Tuple of (job queue, total data scanned in MB)
+
+    Raises:
+        CSVValidationError: If CSV validation fails
+    """
     try:
         # Load with pandas for schema introspection
         df = pd.read_csv(path, nrows=max_rows)
     except FileNotFoundError:
         logging.error(f"Dataset file '{path}' not found.")
-        return deque(), 0.0
+        raise CSVValidationError(f"Dataset file '{path}' not found.")
     except pd.errors.EmptyDataError:
         logging.error(f"Dataset file '{path}' is empty.")
-        return deque(), 0.0
+        raise CSVValidationError(f"Dataset file '{path}' is empty.")
     except Exception as e:
         logging.error(f"Error reading dataset file '{path}': {e}")
-        return deque(), 0.0
+        raise CSVValidationError(
+            f"Error reading dataset file '{path}': {e}"
+        )
 
-    # Validate schema
-    missing = required_columns - set(df.columns)
-    if missing:
-        logging.error(f"Dataset '{path}' missing required columns: {', '.join(missing)}")
-        return deque(), 0.0
+    # Validate schema and data using validation module
+    try:
+        validate_csv_schema(df, path)
+        validate_csv_data(df, path)
+    except CSVValidationError as e:
+        logging.error(str(e))
+        raise
+
+    # Define required columns
+    required_columns = {
+        "database_id", "query_id", "start",
+        "cpu_time", "data_scanned", "scale_factor"
+    }
 
     # # Convert start time to seconds (if present)
     # if "start" in df.columns:

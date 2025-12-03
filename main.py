@@ -120,9 +120,25 @@ def extract_option_payload(payload: Dict) -> Dict:
 
 def build_base_config(defaults: Dict) -> Tuple[SimulationConfig, int, int]:
     config = SimulationConfig()
+
+    # Apply general simulation overrides
     simulation_overrides = defaults.get("simulation", {})
     config.apply_overrides(simulation_overrides)
 
+    # Apply architecture-specific overrides
+    dwaas_overrides = defaults.get("dwaas", {})
+    if dwaas_overrides:
+        config.apply_overrides(dwaas_overrides)
+
+    ep_overrides = defaults.get("ep", {})
+    if ep_overrides:
+        config.apply_overrides(ep_overrides)
+
+    qaas_overrides = defaults.get("qaas", {})
+    if qaas_overrides:
+        config.apply_overrides(qaas_overrides)
+
+    # Apply scheduling defaults
     sched_defaults = defaults.get("scheduling", {}) or {}
     sched_options = extract_option_payload(sched_defaults)
     if sched_options:
@@ -132,6 +148,7 @@ def build_base_config(defaults: Dict) -> Tuple[SimulationConfig, int, int]:
         SCHEDULING_POLICIES["fcfs"],
     )
 
+    # Apply scaling defaults
     scaling_defaults = defaults.get("scaling", {}) or {}
     scaling_options = extract_option_payload(scaling_defaults)
     if scaling_options:
@@ -255,7 +272,6 @@ def build_runs_for_scenario(
                 cold_start=resolve_value(run_payload, scenario_payload, "cold_start", 0),
                 hit_rate=resolve_value(run_payload, scenario_payload, "hit_rate", 0.9),
                 instance=resolve_value(run_payload, scenario_payload, "instance", 0),
-                arrival_rate=resolve_value(run_payload, scenario_payload, "arrival_rate", 10.0),
                 network_bandwidth=resolve_value(run_payload, scenario_payload, "network_bandwidth", 10000),
                 io_bandwidth=resolve_value(run_payload, scenario_payload, "io_bandwidth", 650),
                 memory_bandwidth=resolve_value(run_payload, scenario_payload, "memory_bandwidth", 40000),
@@ -350,7 +366,6 @@ def main():
             "cold_starts": run.cold_start,
             "hit_rate": run.hit_rate,
             "instance": run.instance,
-            "arrival_rate": run.arrival_rate,
             "network_bandwidth": run.network_bandwidth,
             "io_bandwidth": run.io_bandwidth,
             "memory_bandwidth": run.memory_bandwidth,
@@ -373,7 +388,7 @@ def main():
         comparisons = {}
         comparison_params = [
             "architecture", "scheduling", "nodes", "vpu", "scaling", "cold_starts",
-            "hit_rate", "instance", "arrival_rate", "network_bandwidth",
+            "hit_rate", "instance", "network_bandwidth",
             "io_bandwidth", "memory_bandwidth", "dataset"
         ]
 
