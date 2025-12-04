@@ -21,23 +21,32 @@ This guide documents the essential and optional parameters for each architecture
 
 | Parameter | Type | Description | Example |
 |-----------|------|-------------|---------|
+| `architecture` | string | Must be "DWAAS" | `"DWAAS"` |
+| `dataset` | int | Dataset identifier | `999` |
 | `nodes` | int | Number of compute nodes (fixed) | `4` |
 | `instance` | int | Instance type index (0-6, see INSTANCE_TYPES) | `0` |
 | `hit_rate` | float | Cache hit rate (0.0-1.0) | `0.7` |
-| `dataset` | int | Dataset identifier | `999` |
-| `architecture` | string | Must be "DWAAS" | `"DWAAS"` |
 
 ### Optional Parameters
 
 | Parameter | Type | Description | Default | Example |
 |-----------|------|-------------|---------|---------|
+| `cpu_cores` | int | Override CPU cores (normally calculated from instance + nodes) | Calculated | `16` |
 | `network_bandwidth` | int | Network bandwidth in Mbps | From instance config | `10000` |
 | `io_bandwidth` | int | I/O bandwidth in Mbps | From instance config | `650` |
 | `memory_bandwidth` | int | Memory bandwidth in Mbps | From instance config | `40000` |
 | `total_memory_capacity_mb` | int | Total memory in MB | Calculated from nodes | `128000` |
-| `scheduling.policy` | string | Scheduling policy ("fcfs", "sjf", "ljf", "multi_level") | `"fcfs"` | `"sjf"` |
-| `scheduling.max_io_concurrency` | int | Max concurrent I/O jobs | `64` | `32` |
-| `scheduling.max_cpu_concurrency` | int | Max concurrent CPU jobs | `64` | `32` |
+| `scheduling.policy` | string | Scheduling policy ("fcfs", "sjf", "ljf", "multi_level") | `"sjf"` | `"fcfs"` |
+| `scheduling.max_io_concurrency` | int | Max concurrent I/O jobs | `cpu_cores` | `32` |
+| `scheduling.max_cpu_concurrency` | int | Max concurrent CPU jobs | `cpu_cores` | `32` |
+
+### Calculated Parameters
+
+**Note:** By default, `cpu_cores` is automatically calculated as:
+```
+cpu_cores = INSTANCE_TYPES[instance].cpu_cores * nodes
+```
+You can override this by explicitly providing the `cpu_cores` parameter.
 
 ### Not Needed for DWaaS
 
@@ -84,11 +93,11 @@ This guide documents the essential and optional parameters for each architecture
 
 | Parameter | Type | Description | Example |
 |-----------|------|-------------|---------|
+| `architecture` | string | Must be "DWAAS_AUTOSCALING" | `"DWAAS_AUTOSCALING"` |
+| `dataset` | int | Dataset identifier | `999` |
 | `nodes` | int | Initial number of compute nodes | `2` |
 | `instance` | int | Instance type index (0-6) | `0` |
 | `hit_rate` | float | Cache hit rate (0.0-1.0) | `0.7` |
-| `dataset` | int | Dataset identifier | `999` |
-| `architecture` | string | Must be "DWAAS_AUTOSCALING" | `"DWAAS_AUTOSCALING"` |
 | `cold_start` | float | Cold start delay in seconds when scaling | `60.0` |
 | `scaling.policy` | string | Scaling policy ("queue", "reactive", "predictive") | `"queue"` |
 
@@ -96,14 +105,23 @@ This guide documents the essential and optional parameters for each architecture
 
 | Parameter | Type | Description | Default | Example |
 |-----------|------|-------------|---------|---------|
+| `cpu_cores` | int | Override CPU cores (normally calculated from instance + nodes) | Calculated | `16` |
 | `network_bandwidth` | int | Network bandwidth in Mbps | From instance | `10000` |
 | `io_bandwidth` | int | I/O bandwidth in Mbps | From instance | `650` |
 | `memory_bandwidth` | int | Memory bandwidth in Mbps | From instance | `40000` |
 | `total_memory_capacity_mb` | int | Total memory in MB | Calculated | `64000` |
-| `scheduling.policy` | string | Scheduling policy | `"fcfs"` | `"sjf"` |
-| `scheduling.max_io_concurrency` | int | Max concurrent I/O jobs | `64` | `32` |
-| `scheduling.max_cpu_concurrency` | int | Max concurrent CPU jobs | `64` | `32` |
+| `scheduling.policy` | string | Scheduling policy | `"sjf"` | `"fcfs"` |
+| `scheduling.max_io_concurrency` | int | Max concurrent I/O jobs | `cpu_cores` | `32` |
+| `scheduling.max_cpu_concurrency` | int | Max concurrent CPU jobs | `cpu_cores` | `32` |
 | `use_spot_instances` | bool | Use spot instances (50% discount) | `false` | `true` |
+
+### Calculated Parameters
+
+**Note:** By default, `cpu_cores` is automatically calculated as:
+```
+cpu_cores = INSTANCE_TYPES[instance].cpu_cores * nodes
+```
+You can override this by explicitly providing the `cpu_cores` parameter.
 
 ### Scaling Policy Parameters
 
@@ -197,11 +215,10 @@ This guide documents the essential and optional parameters for each architecture
 
 | Parameter | Type | Description | Example |
 |-----------|------|-------------|---------|
-| `vpu` | int | Virtual Processing Units (RPUs) | `16` |
-| `nodes` | int | Number of nodes for memory distribution | `1` |
-| `hit_rate` | float | Cache hit rate (0.0-1.0) | `0.8` |
-| `dataset` | int | Dataset identifier | `999` |
 | `architecture` | string | Must be "ELASTIC_POOL" | `"ELASTIC_POOL"` |
+| `dataset` | int | Dataset identifier | `999` |
+| `vpu` | int | Virtual Processing Units (RPUs) | `16` |
+| `hit_rate` | float | Cache hit rate (0.0-1.0) | `0.8` |
 | `cold_start` | float | Cold start delay in seconds | `120.0` |
 | `scaling.policy` | string | Scaling policy | `"queue"` |
 
@@ -213,16 +230,18 @@ This guide documents the essential and optional parameters for each architecture
 | `io_bandwidth` | int | I/O bandwidth in Mbps | `1200` | `1200` |
 | `memory_bandwidth` | int | Memory bandwidth in Mbps | `40000` | `40000` |
 | `total_memory_capacity_mb` | int | Total memory in MB | `96000` | `96000` |
-| `scheduling.policy` | string | Scheduling policy | `"fcfs"` | `"fcfs"` |
-| `scheduling.max_io_concurrency` | int | Max concurrent I/O jobs | `64` | `32` |
-| `scheduling.max_cpu_concurrency` | int | Max concurrent CPU jobs | `64` | `32` |
+| `scheduling.policy` | string | Scheduling policy | `"sjf"` | `"fcfs"` |
+| `scheduling.max_io_concurrency` | int | Max concurrent I/O jobs | `cpu_cores` | `32` |
+| `scheduling.max_cpu_concurrency` | int | Max concurrent CPU jobs | `cpu_cores` | `32` |
 
-### Why `nodes` is Needed
+### Calculated Parameters
 
-Even though Elastic Pool is RPU-based, the `nodes` parameter is required for:
-- Memory distribution tracking across physical nodes
-- DRAM cache partitioning
-- Bandwidth allocation per node
+**Note:** The number of nodes for memory distribution is **automatically calculated** internally based on VPU:
+```
+cpu_cores = 2 * vpu
+nodes = cpu_cores  # Used for memory distribution tracking
+```
+You do **not** need to specify `nodes` for Elastic Pool - it is derived from VPU.
 
 ### Scaling Policy Parameters
 
@@ -240,7 +259,6 @@ Same as DWaaS Autoscaling (queue, reactive, predictive).
   "architecture": "ELASTIC_POOL",
   "dataset": 999,
   "vpu": 16,
-  "nodes": 1,
   "hit_rate": 0.8,
   "network_bandwidth": 10000,
   "io_bandwidth": 1200,
@@ -269,47 +287,47 @@ Same as DWaaS Autoscaling (queue, reactive, predictive).
 }
 ```
 
+**Note:** The `nodes` parameter is no longer needed - it's automatically calculated as `cpu_cores = 2 * vpu`, then `nodes = cpu_cores`.
+
 ---
 
 ## QaaS
 
 **Architecture Type:** `QAAS` (3)
 
-**Description:** Query-as-a-Service with pay-per-query pricing model. No persistent infrastructure.
+**Description:** Query-as-a-Service with pay-per-query pricing model. No persistent infrastructure, no queueing.
 
 ### Essential Parameters
 
 | Parameter | Type | Description | Example |
 |-----------|------|-------------|---------|
-| `dataset` | int | Dataset identifier | `999` |
 | `architecture` | string | Must be "QAAS" | `"QAAS"` |
+| `dataset` | int | Dataset identifier | `999` |
 
 ### Optional Parameters
 
 | Parameter | Type | Description | Default | Example |
 |-----------|------|-------------|---------|---------|
-| `scheduling.policy` | string | Scheduling policy | `"fcfs"` | `"sjf"` |
-| `scheduling.max_io_concurrency` | int | Max concurrent I/O jobs | `64` | `64` |
-| `scheduling.max_cpu_concurrency` | int | Max concurrent CPU jobs | `64` | `64` |
+| `network_bandwidth` | int | Network bandwidth in Gbps (converted to Mbps internally) | `10` | `10` |
 
-### Must Be Zero/Not Used
+### Automatically Set to Zero
 
-The following parameters MUST be set to `0` or `0.0` for QaaS (no persistent infrastructure):
+The following parameters are **automatically set to 0** for QaaS (no persistent infrastructure). You do **not** need to specify them:
 
-| Parameter | Required Value | Reason |
-|-----------|----------------|--------|
+| Parameter | Auto Value | Reason |
+|-----------|------------|--------|
 | `nodes` | `0` | No persistent nodes |
 | `vpu` | `0` | Not VPU-based |
 | `hit_rate` | `0.0` | No persistent cache |
-| `network_bandwidth` | `10` (minimal) | Per-query allocation |
 | `io_bandwidth` | `0` | Dynamic per-query |
 | `memory_bandwidth` | `0` | Dynamic per-query |
 | `total_memory_capacity_mb` | `0` | No persistent memory |
-| `cold_start` | `0` | No cold start delay |
+| `cold_start` | `0.0` | No cold start delay |
+| `instance` | `0` | No instance-based infrastructure |
 
-### Not Needed for QaaS
+### Not Applicable for QaaS
 
-- `instance` - No instance-based infrastructure
+- `scheduling.*` - QaaS has no queueing; queries are executed immediately with dynamic resource allocation
 - `scaling.*` - Auto-scales per query automatically
 - `use_spot_instances` - Not applicable
 
@@ -322,39 +340,37 @@ QaaS uses pay-per-query pricing:
 
 ### Example Configuration
 
+**Minimal QaaS Configuration (Recommended):**
 ```json
 {
   "name": "qaas",
   "architecture": "QAAS",
   "dataset": 999,
-  "nodes": 0,
-  "vpu": 0,
-  "hit_rate": 0.0,
-  "network_bandwidth": 10,
-  "io_bandwidth": 0,
-  "memory_bandwidth": 0,
-  "total_memory_capacity_mb": 0,
-  "cold_start": 0,
   "runs": [
     {
-      "name": "qaas_fcfs_ondemand",
-      "scheduling": {
-        "policy": "fcfs",
-        "max_io_concurrency": 64,
-        "max_cpu_concurrency": 64
-      }
-    },
-    {
-      "name": "qaas_sjf_ondemand",
-      "scheduling": {
-        "policy": "sjf",
-        "max_io_concurrency": 64,
-        "max_cpu_concurrency": 64
-      }
+      "name": "qaas_ondemand",
+      "description": "Pay-per-query with automatic resource allocation"
     }
   ]
 }
 ```
+
+**With Optional Network Bandwidth Override:**
+```json
+{
+  "name": "qaas_custom",
+  "architecture": "QAAS",
+  "dataset": 999,
+  "network_bandwidth": 20,
+  "runs": [
+    {
+      "name": "qaas_high_bandwidth"
+    }
+  ]
+}
+```
+
+**Note:** All infrastructure parameters (nodes, vpu, hit_rate, io_bandwidth, memory_bandwidth, cold_start, instance) are automatically set to 0 and do not need to be specified.
 
 ---
 
@@ -435,19 +451,31 @@ Seven instance types are available (index 0-6):
 |-----------|-------|------------|--------------|------|
 | `architecture` | Required | Required | Required | Required |
 | `dataset` | Required | Required | Required | Required |
-| `nodes` | Required | Required | Required* | 0 |
-| `instance` | Required | Required | - | - |
-| `vpu` | - | - | Required | 0 |
-| `hit_rate` | Required | Required | Required | 0.0 |
-| `cold_start` | - | Required | Required | 0 |
+| `nodes` | Required | Required | Auto-calculated | Auto: 0 |
+| `instance` | Required | Required | - | Auto: 0 |
+| `vpu` | - | - | Required | Auto: 0 |
+| `hit_rate` | Required | Required | Required | Auto: 0.0 |
+| `cold_start` | Optional (0.0) | Required | Required | Auto: 0.0 |
+| `cpu_cores` | Optional* | Optional* | Auto-calculated | Auto: 0 |
 | `scaling.*` | - | Required | Required | - |
-| `network_bandwidth` | Optional | Optional | Optional | 10 |
-| `io_bandwidth` | Optional | Optional | Optional | 0 |
-| `memory_bandwidth` | Optional | Optional | Optional | 0 |
-| `total_memory_capacity_mb` | Optional | Optional | Optional | 0 |
-| `scheduling.*` | Optional | Optional | Optional | Optional |
+| `network_bandwidth` | Optional | Optional | Optional | Optional (10 Gbps) |
+| `io_bandwidth` | Optional | Optional | Optional | Auto: 0 |
+| `memory_bandwidth` | Optional | Optional | Optional | Auto: 0 |
+| `total_memory_capacity_mb` | Optional | Optional | Optional | Auto: 0 |
+| `scheduling.*` | Optional | Optional | Optional | N/A (no queueing) |
 
-\* Required for memory distribution tracking
+**Legend:**
+- **Required**: Must be specified by user
+- **Optional**: Can be specified, otherwise uses default or calculated value
+- **Auto-calculated**: Automatically calculated from other parameters, user should not specify
+- **Auto: X**: Automatically set to value X for this architecture, user specification ignored
+- **N/A**: Not applicable for this architecture
+- **-**: Not used for this architecture
+
+**Notes:**
+- \* For DWaaS architectures, `cpu_cores` is calculated as `INSTANCE_TYPES[instance].cpu_cores * nodes` if not explicitly provided
+- For Elastic Pool, `nodes` is calculated as `cpu_cores = 2 * vpu; nodes = cpu_cores`
+- For QaaS, all infrastructure parameters are automatically set to 0
 
 ---
 
@@ -464,10 +492,12 @@ Seven instance types are available (index 0-6):
 
 4. **QaaS**: Use for serverless, pay-per-query model. No infrastructure management. Cost based on data scanned.
 
-5. **Scheduling Policies**:
+5. **Scheduling Policies** (default is SJF):
+   - **SJF** (default): Optimize for throughput, minimize average latency
    - **FCFS**: Fair, predictable latency
-   - **SJF**: Optimize for throughput, minimize average latency
    - **LJF**: Deprioritize large jobs
    - **Multi-level**: Advanced prioritization with multiple queues
 
 6. **Spot Instances**: Enable `use_spot_instances: true` in DWaaS Autoscaling for 50% cost reduction with interruption risk.
+
+7. **Concurrency Limits**: By default, `max_io_concurrency` and `max_cpu_concurrency` are set to `cpu_cores`, allowing full utilization of available resources. You can override these to limit concurrency if needed.

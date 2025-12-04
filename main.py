@@ -145,7 +145,7 @@ def build_base_config(defaults: Dict) -> Tuple[SimulationConfig, int, int]:
         config.apply_overrides({"scheduling": sched_options})
     default_sched_policy = map_scheduling_policy(
         sched_defaults.get("policy"),
-        SCHEDULING_POLICIES["fcfs"],
+        SCHEDULING_POLICIES["sjf"],  # Changed default from FCFS to SJF
     )
 
     # Apply scaling defaults
@@ -261,22 +261,62 @@ def build_runs_for_scenario(
 
         run_name = run_payload.get("name", f"{scenario_name}_{idx}")
 
+        # Apply architecture-specific defaults
+        arch_value = architecture.value if isinstance(architecture, ArchitectureType) else architecture
+
+        # QaaS (architecture 3+): Force infrastructure params to 0, ignore user input
+        if arch_value >= 3:
+            nodes = 0
+            vpu = 0
+            hit_rate = 0.0
+            cold_start = 0.0
+            io_bandwidth = 0
+            memory_bandwidth = 0
+            instance = 0
+            # For QaaS, only dataset and architecture are required
+            # Network bandwidth can still be configured (default 10 Gbps = 10000 Mbps internally)
+            network_bandwidth = resolve_value(run_payload, scenario_payload, "network_bandwidth", 10)
+        # Elastic Pool (architecture 2): nodes calculated internally from VPU
+        elif arch_value == 2:
+            nodes = resolve_value(run_payload, scenario_payload, "nodes", 1)  # Will be ignored, but kept for compatibility
+            vpu = resolve_value(run_payload, scenario_payload, "vpu", 0, required=True)
+            hit_rate = resolve_value(run_payload, scenario_payload, "hit_rate", 0.8)
+            cold_start = resolve_value(run_payload, scenario_payload, "cold_start", 120.0)
+            io_bandwidth = resolve_value(run_payload, scenario_payload, "io_bandwidth", 1200)
+            memory_bandwidth = resolve_value(run_payload, scenario_payload, "memory_bandwidth", 40000)
+            network_bandwidth = resolve_value(run_payload, scenario_payload, "network_bandwidth", 10000)
+            instance = 0  # Not used for EP
+        # DWaaS and DWaaS_AUTOSCALING (architecture 0, 1)
+        else:
+            nodes = resolve_value(run_payload, scenario_payload, "nodes", 1, required=True)
+            vpu = 0  # Not used for DWaaS
+            hit_rate = resolve_value(run_payload, scenario_payload, "hit_rate", 0.7)
+            cold_start = resolve_value(run_payload, scenario_payload, "cold_start", 60.0 if arch_value == 1 else 0.0)
+            io_bandwidth = resolve_value(run_payload, scenario_payload, "io_bandwidth", 650)
+            memory_bandwidth = resolve_value(run_payload, scenario_payload, "memory_bandwidth", 40000)
+            network_bandwidth = resolve_value(run_payload, scenario_payload, "network_bandwidth", 10000)
+            instance = resolve_value(run_payload, scenario_payload, "instance", 0)
+
+        # cpu_cores is optional for DWaaS architectures (will be calculated from instance + nodes if not provided)
+        cpu_cores = resolve_value(run_payload, scenario_payload, "cpu_cores", None)
+
         runs.append(
             SimulationRun(
                 name=run_name,
                 architecture=architecture,
                 scheduling_policy=run_sched_policy,
-                nodes=resolve_value(run_payload, scenario_payload, "nodes", 1),
-                vpu=resolve_value(run_payload, scenario_payload, "vpu", 0),
+                nodes=nodes,
+                vpu=vpu,
                 scaling_policy=run_scaling_policy,
-                cold_start=resolve_value(run_payload, scenario_payload, "cold_start", 0),
-                hit_rate=resolve_value(run_payload, scenario_payload, "hit_rate", 0.9),
-                instance=resolve_value(run_payload, scenario_payload, "instance", 0),
-                network_bandwidth=resolve_value(run_payload, scenario_payload, "network_bandwidth", 10000),
-                io_bandwidth=resolve_value(run_payload, scenario_payload, "io_bandwidth", 650),
-                memory_bandwidth=resolve_value(run_payload, scenario_payload, "memory_bandwidth", 40000),
+                cold_start=cold_start,
+                hit_rate=hit_rate,
+                instance=instance,
+                network_bandwidth=network_bandwidth,
+                io_bandwidth=io_bandwidth,
+                memory_bandwidth=memory_bandwidth,
                 dataset_index=dataset_value,
                 config=run_config,
+                cpu_cores=cpu_cores,
             )
         )
 
