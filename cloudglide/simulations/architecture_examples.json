@@ -233,6 +233,298 @@
           }
         }
       ]
+    },
+    {
+      "name": "dwaas_hit_rate_study",
+      "description": "Study impact of cache hit rate on DWaaS performance (single variable)",
+      "architecture": "DWAAS",
+      "dataset": 999,
+      "nodes": 4,
+      "instance": 0,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 650,
+      "memory_bandwidth": 40000,
+      "total_memory_capacity_mb": 128000,
+      "runs": [
+        {
+          "name": "hit_rate_0",
+          "hit_rate": 0.0
+        },
+        {
+          "name": "hit_rate_25",
+          "hit_rate": 0.25
+        },
+        {
+          "name": "hit_rate_50",
+          "hit_rate": 0.5
+        },
+        {
+          "name": "hit_rate_75",
+          "hit_rate": 0.75
+        },
+        {
+          "name": "hit_rate_100",
+          "hit_rate": 1.0
+        }
+      ]
+    },
+    {
+      "name": "dwaas_node_scaling_study",
+      "description": "Study impact of node count on DWaaS performance (single variable)",
+      "architecture": "DWAAS",
+      "dataset": 999,
+      "instance": 0,
+      "hit_rate": 0.7,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 650,
+      "memory_bandwidth": 40000,
+      "runs": [
+        {
+          "name": "nodes_2",
+          "nodes": 2,
+          "total_memory_capacity_mb": 64000
+        },
+        {
+          "name": "nodes_4",
+          "nodes": 4,
+          "total_memory_capacity_mb": 128000
+        },
+        {
+          "name": "nodes_8",
+          "nodes": 8,
+          "total_memory_capacity_mb": 256000
+        },
+        {
+          "name": "nodes_16",
+          "nodes": 16,
+          "total_memory_capacity_mb": 512000
+        }
+      ]
+    },
+    {
+      "name": "ep_vpu_study",
+      "description": "Study impact of VPU count on Elastic Pool performance (single variable)",
+      "architecture": "ELASTIC_POOL",
+      "dataset": 999,
+      "nodes": 1,
+      "hit_rate": 0.8,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 1200,
+      "memory_bandwidth": 40000,
+      "total_memory_capacity_mb": 96000,
+      "cold_start": 120.0,
+      "runs": [
+        {
+          "name": "vpu_8",
+          "vpu": 8,
+          "scaling": {
+            "policy": "queue",
+            "queue": {
+              "length_thresholds": [10, 20, 30],
+              "scale_steps": [4, 8, 12],
+              "scale_in_utilization": 0.3,
+              "scale_in_step": 4
+            }
+          }
+        },
+        {
+          "name": "vpu_16",
+          "vpu": 16,
+          "scaling": {
+            "policy": "queue",
+            "queue": {
+              "length_thresholds": [10, 20, 30],
+              "scale_steps": [8, 16, 24],
+              "scale_in_utilization": 0.3,
+              "scale_in_step": 8
+            }
+          }
+        },
+        {
+          "name": "vpu_32",
+          "vpu": 32,
+          "scaling": {
+            "policy": "queue",
+            "queue": {
+              "length_thresholds": [10, 20, 30],
+              "scale_steps": [16, 32, 48],
+              "scale_in_utilization": 0.3,
+              "scale_in_step": 16
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "dwaas_instance_type_study",
+      "description": "Compare different instance types for DWaaS (single variable)",
+      "architecture": "DWAAS",
+      "dataset": 999,
+      "nodes": 4,
+      "hit_rate": 0.7,
+      "runs": [
+        {
+          "name": "ra3_xlplus",
+          "instance": 0,
+          "network_bandwidth": 1000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 128000
+        },
+        {
+          "name": "ra3_4xlarge",
+          "instance": 1,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 2000,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 384000
+        },
+        {
+          "name": "c5d_4xlarge",
+          "instance": 5,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 575,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 128000
+        }
+      ]
+    },
+    {
+      "name": "multi_architecture_comparison",
+      "description": "Compare performance and cost across different architectures",
+      "dataset": 999,
+      "runs": [
+        {
+          "name": "dwaas_4nodes",
+          "architecture": "DWAAS",
+          "nodes": 4,
+          "instance": 0,
+          "hit_rate": 0.7,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 128000,
+          "scheduling": {
+            "policy": "sjf",
+            "max_io_concurrency": 32,
+            "max_cpu_concurrency": 32
+          }
+        },
+        {
+          "name": "dwaas_autoscaling_2nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 2,
+          "instance": 0,
+          "hit_rate": 0.7,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 64000,
+          "cold_start": 60.0,
+          "scheduling": {
+            "policy": "sjf",
+            "max_io_concurrency": 32,
+            "max_cpu_concurrency": 32
+          },
+          "scaling": {
+            "policy": "queue",
+            "queue": {
+              "length_thresholds": [5, 10, 15, 20],
+              "scale_steps": [4, 8, 12, 16],
+              "scale_in_utilization": 0.4,
+              "scale_in_step": 4
+            }
+          }
+        },
+        {
+          "name": "elastic_pool_16vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 16,
+          "nodes": 1,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0,
+          "scheduling": {
+            "policy": "fcfs",
+            "max_io_concurrency": 32,
+            "max_cpu_concurrency": 32
+          },
+          "scaling": {
+            "policy": "queue",
+            "queue": {
+              "length_thresholds": [10, 20, 30],
+              "scale_steps": [8, 16, 24],
+              "scale_in_utilization": 0.3,
+              "scale_in_step": 8
+            }
+          }
+        },
+        {
+          "name": "qaas_ondemand",
+          "architecture": "QAAS",
+          "nodes": 0,
+          "vpu": 0,
+          "hit_rate": 0.0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 0,
+          "memory_bandwidth": 0,
+          "total_memory_capacity_mb": 0,
+          "cold_start": 0,
+          "scheduling": {
+            "policy": "sjf",
+            "max_io_concurrency": 64,
+            "max_cpu_concurrency": 64
+          }
+        }
+      ]
+    },
+    {
+      "name": "dwaas_pm_p_study",
+      "description": "Study impact of power mean parameter (pm_p) on estimation accuracy",
+      "architecture": "DWAAS",
+      "dataset": 999,
+      "nodes": 4,
+      "instance": 0,
+      "hit_rate": 0.7,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 650,
+      "memory_bandwidth": 40000,
+      "total_memory_capacity_mb": 128000,
+      "runs": [
+        {
+          "name": "pm_p_1",
+          "config_overrides": {
+            "pm_p": 1.0
+          }
+        },
+        {
+          "name": "pm_p_2",
+          "config_overrides": {
+            "pm_p": 2.0
+          }
+        },
+        {
+          "name": "pm_p_4",
+          "config_overrides": {
+            "pm_p": 4.0
+          }
+        },
+        {
+          "name": "pm_p_8",
+          "config_overrides": {
+            "pm_p": 8.0
+          }
+        },
+        {
+          "name": "pm_p_16",
+          "config_overrides": {
+            "pm_p": 16.0
+          }
+        }
+      ]
     }
   ]
 }
