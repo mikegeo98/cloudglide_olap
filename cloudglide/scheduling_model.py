@@ -5,6 +5,7 @@ from enum import IntEnum
 from typing import List
 from cloudglide.config import ArchitectureType
 from cloudglide.job import Job
+from cloudglide.qaas_slot_management import qaas_slot_management_scheduler
 
 
 # ----------------------------
@@ -132,6 +133,8 @@ def io_scheduler(
     cpu_cores: int,
     phase: str,
     options=None,
+    config=None,
+    cpu_jobs=None,
 ):
     if phase not in ("arrival", "io_done", "scale_check"):
         return
@@ -154,6 +157,31 @@ def io_scheduler(
         max_active = options.get("max_io_concurrency")
         if max_active is not None:
             capacity = min(capacity, max_active)
+
+    # Check if QaaS slot management is active
+    if architecture in (ArchitectureType.QAAS, ArchitectureType.QAAS_CAPACITY) and config:
+        # Check if any slot management policies are enabled
+        has_strict_priority = getattr(config, 'qaas_strict_priority', False)
+        has_fixed_ratio = getattr(config, 'qaas_fixed_ratio', 0.0) > 0.0
+        baseline_slots = getattr(config, 'qaas_baseline_slots', 400)
+
+        if has_strict_priority or has_fixed_ratio:
+            # Use QaaS slot management scheduler
+            if cpu_jobs is None:
+                cpu_jobs = deque()  # fallback if not provided
+
+            qaas_slot_management_scheduler(
+                waiting_jobs=waiting_jobs,
+                io_jobs=io_jobs,
+                cpu_jobs=cpu_jobs,
+                baseline_slots=baseline_slots,
+                now=now,
+                strict_priority=has_strict_priority,
+                fixed_ratio=has_fixed_ratio
+            )
+            # Age remaining jobs
+            age_jobs_delay(waiting_jobs, "queueing_delay", dt)
+            return
 
     # If full, just age delays
     if len(io_jobs) >= capacity:

@@ -151,6 +151,11 @@ class SimulationConfig:
     core_alloc_window: float = 10.0
     s3_bandwidth: int = 1000
 
+    # QaaS Slot Management Parameters (Scenario 2)
+    qaas_strict_priority: bool = False           # Enable preemptive scheduling (short jobs preempt long)
+    qaas_fixed_ratio: float = 0.0                # Reserved slot percentage for short jobs (0.0 = disabled)
+    qaas_baseline_slots: int = 400               # Total baseline slot pool
+
     scheduling_options: Dict[str, Any] = field(default_factory=_default_scheduling_options)
     scaling_options: Dict[str, Any] = field(default_factory=_default_scaling_options)
 
@@ -183,6 +188,10 @@ class SimulationConfig:
             errors.append(
                 f"shuffle_percentage_max must be in [0, 1], got {self.shuffle_percentage_max}"
             )
+        if not 0 <= self.qaas_fixed_ratio <= 1:
+            errors.append(
+                f"qaas_fixed_ratio must be in [0, 1], got {self.qaas_fixed_ratio}"
+            )
 
         # Validate positive values
         if self.cold_start_delay < 0:
@@ -212,6 +221,10 @@ class SimulationConfig:
         if self.qaas_cost_per_tb < 0:
             errors.append(
                 f"qaas_cost_per_tb must be non-negative, got {self.qaas_cost_per_tb}"
+            )
+        if self.qaas_baseline_slots < 1:
+            errors.append(
+                f"qaas_baseline_slots must be positive, got {self.qaas_baseline_slots}"
             )
 
         # Validate scale factor range

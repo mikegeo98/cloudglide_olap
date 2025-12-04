@@ -352,6 +352,8 @@ def schedule_jobs(
             cpu_cores,
             phase,
             config.scheduling_options,
+            config,
+            state["cpu_jobs"],
         )
 
         cpu_scheduler(
