@@ -38,9 +38,9 @@
       "core_alloc_window": 10.0
     },
     "scheduling": {
-      "policy": "fcfs",
-      "max_io_concurrency": 64,
-      "max_cpu_concurrency": 64,
+      "policy": "sjf",
+      "max_io_concurrency": null,
+      "max_cpu_concurrency": null,
       "multi_level_queues": []
     },
     "scaling": {
@@ -84,8 +84,8 @@
           "name": "dwaas_fcfs",
           "scheduling": {
             "policy": "fcfs",
-            "max_io_concurrency": 32,
-            "max_cpu_concurrency": 32
+            "max_io_concurrency": 16,
+            "max_cpu_concurrency": 16
           }
         }
       ]
@@ -108,9 +108,7 @@
           "name": "dwaas_queue_scaling",
           "description": "Scale based on queue length",
           "scheduling": {
-            "policy": "sjf",
-            "max_io_concurrency": 32,
-            "max_cpu_concurrency": 32
+            "policy": "sjf"
           },
           "scaling": {
             "policy": "queue",
@@ -160,7 +158,6 @@
       "architecture": "ELASTIC_POOL",
       "dataset": 999,
       "vpu": 16,
-      "nodes": 1,
       "hit_rate": 0.8,
       "network_bandwidth": 10000,
       "io_bandwidth": 1200,
@@ -172,9 +169,7 @@
           "name": "ep_queue_scaling",
           "description": "Scale VPUs based on queue length",
           "scheduling": {
-            "policy": "fcfs",
-            "max_io_concurrency": 32,
-            "max_cpu_concurrency": 32
+            "policy": "fcfs"
           },
           "scaling": {
             "policy": "queue",
@@ -189,6 +184,11 @@
         {
           "name": "ep_reactive_scaling",
           "description": "Scale VPUs based on CPU utilization",
+          "scheduling": {
+            "policy": "sjf",
+            "max_io_concurrency": 24,
+            "max_cpu_concurrency": 24
+          },
           "scaling": {
             "policy": "reactive",
             "reactive": {
@@ -206,31 +206,10 @@
       "description": "Query-as-a-Service (pay-per-query model, auto-scaling cores per query)",
       "architecture": "QAAS",
       "dataset": 999,
-      "nodes": 0,
-      "vpu": 0,
-      "hit_rate": 0.0,
-      "network_bandwidth": 10000,
-      "io_bandwidth": 0,
-      "memory_bandwidth": 0,
-      "total_memory_capacity_mb": 0,
       "runs": [
         {
-          "name": "qaas_fcfs_ondemand",
-          "description": "Pay-per-query with on-demand pricing",
-          "scheduling": {
-            "policy": "fcfs",
-            "max_io_concurrency": 64,
-            "max_cpu_concurrency": 64
-          }
-        },
-        {
-          "name": "qaas_sjf_ondemand",
-          "description": "Shortest job first for better throughput",
-          "scheduling": {
-            "policy": "sjf",
-            "max_io_concurrency": 64,
-            "max_cpu_concurrency": 64
-          }
+          "name": "qaas_ondemand",
+          "description": "Pay-per-query with on-demand pricing - no infrastructure parameters needed"
         }
       ]
     }

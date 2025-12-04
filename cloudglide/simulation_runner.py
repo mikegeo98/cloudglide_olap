@@ -47,14 +47,39 @@ def configure_execution_params(
     instance: int,
     network_bandwidth: int,
     io_bandwidth: int,
-    memory_bandwidth: int
+    memory_bandwidth: int,
+    cpu_cores_override: int = None
 ) -> ExecutionParams:
     """
     Configure execution parameters based on the architecture type.
+
+    Args:
+        architecture: Architecture type (0=DWAAS, 1=DWAAS_AUTOSCALING, 2=ELASTIC_POOL, 3+=QAAS)
+        scheduling: Scheduling policy
+        nodes: Number of nodes (used for DWaaS, ignored for EP/QaaS)
+        vpu: Virtual Processing Units (used for EP only)
+        scaling: Scaling policy
+        cold_start: Cold start delay
+        hit_rate: Cache hit rate
+        instance: Instance type index (used for DWaaS only)
+        network_bandwidth: Network bandwidth in Gbps
+        io_bandwidth: I/O bandwidth (per node for DWaaS, per VPU for EP)
+        memory_bandwidth: Memory bandwidth in Mbps
+        cpu_cores_override: Optional override for cpu_cores (DWaaS only)
+
+    Returns:
+        ExecutionParams configured for the specified architecture
     """
+    # DWaaS and DWaaS_AUTOSCALING (architecture 0 and 1)
     if architecture < 2:
         config = get_instance_config(instance, nodes)
-        cpu_cores = config["cpu_cores"]
+
+        # Allow cpu_cores override, otherwise use calculated value
+        if cpu_cores_override is not None:
+            cpu_cores = cpu_cores_override
+        else:
+            cpu_cores = config["cpu_cores"]
+
         memory = config["memory"] * 1024  # Convert GB to MB
         io_bw = config["io_bandwidth"]
         memory_bw = config["memory_bandwidth"]
@@ -77,6 +102,7 @@ def configure_execution_params(
             hit_rate=hit_rate
         )
 
+    # Elastic Pool (architecture 2)
     elif architecture == 2:
         max_jobs = 100
         cpu_cores = 2 * vpu
@@ -84,10 +110,15 @@ def configure_execution_params(
         network_bw = network_bandwidth * 1000
         memory_bw = 50000
         io_bw = int(io_bandwidth * vpu / 4)  # Scale based on VPUs
+
+        # Calculate nodes internally based on cpu_cores for memory distribution
+        # User no longer needs to specify nodes for EP
+        nodes_internal = cpu_cores
+
         return ExecutionParams(
             scheduling=scheduling,
             scaling=scaling,
-            nodes=cpu_cores,
+            nodes=nodes_internal,
             cpu_cores=cpu_cores,
             io_bw=io_bw,
             max_jobs=max_jobs,
@@ -99,6 +130,7 @@ def configure_execution_params(
             hit_rate=hit_rate
         )
 
+    # QaaS (architecture 3+)
     else:
         max_jobs = 100000
         cpu_cores = 0
@@ -107,19 +139,25 @@ def configure_execution_params(
         vpu_param = 0
         network_bw = network_bandwidth * 1000
         memory_bw = 50000
+
+        # QaaS has no persistent infrastructure, so force these to 0
+        nodes_internal = 0
+        hit_rate_internal = 0.0  # No persistent cache
+        cold_start_internal = 0.0  # No cold start delay
+
         return ExecutionParams(
             scheduling=scheduling,
             scaling=scaling,
-            nodes=0,
-            cpu_cores=0,
-            io_bw=0,
+            nodes=nodes_internal,
+            cpu_cores=cpu_cores,
+            io_bw=io_bw,
             max_jobs=max_jobs,
             vpu=vpu_param,
             network_bw=network_bw,
             memory_bw=memory_bw,
             total_memory_capacity_mb=memory,
-            cold_start=cold_start,
-            hit_rate=hit_rate
+            cold_start=cold_start_internal,
+            hit_rate=hit_rate_internal
         )
 
 
@@ -148,6 +186,7 @@ class SimulationRun:
     memory_bandwidth: int
     dataset_index: int
     config: SimulationConfig
+    cpu_cores: int = None  # Optional override for DWaaS architectures
 
 
 def run_simulation(
@@ -177,8 +216,9 @@ def run_simulation(
         iob = run.io_bandwidth
         mb = run.memory_bandwidth
         ds_idx = run.dataset_index
+        cpu_cores_override = run.cpu_cores
         exec_params = configure_execution_params(
-            arch, sched, node, v, sc, cs, hr, inst, nb, iob, mb)
+            arch, sched, node, v, sc, cs, hr, inst, nb, iob, mb, cpu_cores_override)
         sim_params = configure_simulation_params(ds_idx, config)
 
         output_file_path = f"{output_prefix}_{file_counter}.csv"
