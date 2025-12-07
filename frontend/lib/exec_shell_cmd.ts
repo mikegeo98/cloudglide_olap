@@ -17,8 +17,10 @@ export default async function runSimulation(input_csv: File | undefined, input_j
     fs.writeFileSync("../" + path, input_json) // starting point of this call is frontend/
 
     // Execute the recently saved input.json file
-    const architecture = JSON.parse(input_json).scenarios[0].name
-    const { stdout, stderr } = await exec("cd .. && python main.py " + architecture + " " + path)
-    console.log("stdout:", stdout)
-    console.error("stderr:", stderr)
+    const scenarios = JSON.parse(input_json).scenarios
+    for (const scenario of scenarios) {
+        const { stdout, stderr } = await exec("cd .. && python main.py " + scenario.name + " " + path)
+        console.log("stdout:", stdout)
+        console.error("stderr:", stderr)
+    }
 }

@@ -5,12 +5,12 @@ import React from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 
 export default function NextButton() {
-    const { stage, increaseStage } = React.useContext(InputContext)
+    const { stage, setStage } = React.useContext(InputContext)
 
     const switchStage = (n: -1 | 1) => {
         if (stage === 0 && n === -1) return
         
-        increaseStage(stage + n)
+        setStage(stage + n)
     }
 
     return (

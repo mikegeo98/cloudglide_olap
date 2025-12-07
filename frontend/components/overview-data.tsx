@@ -10,7 +10,7 @@ import JsonViewer from "./json-viewer";
 
 export default function OverviewData() {
     const router = useRouter()
-    const { stage, increaseStage, data, dataToJson } = React.useContext(InputContext)
+    const { stage, setStage, data, dataToJson } = React.useContext(InputContext)
     const [loading, setLoading] = React.useState(false)
 
     function handleRunSimulation() {
@@ -26,7 +26,7 @@ export default function OverviewData() {
             <h1>Overview</h1>
             <JsonViewer json={dataToJson()} />
             <div className="flex gap-3">
-                <Button variant="outline" size="icon" className="rounded-full" onClick={() => increaseStage(stage - 1)}>
+                <Button variant="outline" size="icon" className="rounded-full" onClick={() => setStage(stage - 1)}>
                     <ArrowLeft />
                 </Button>
                 <Button variant="outline" className="bg-foreground text-background w-[180px]" onClick={handleRunSimulation}>

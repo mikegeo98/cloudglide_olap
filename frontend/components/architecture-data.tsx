@@ -1,7 +1,7 @@
 "use client"
 
 import NextButton from "@/components/next-btn";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -13,220 +13,335 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { InputContext } from "@/components/provider";
-import { Button } from "@/components/ui/button";
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 
 import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { ArchitectureType, creatArchitectureSchema, ZodDWAAS, ZodQAAS } from "@/lib/zod-schemas";
 import { instanceTypes } from "@/lib/config";
-
-const formSchema = z.object({
-    architecture: z.string(),
-    nodes: z.number(),
-    hit_rate: z.number(),
-    // arrival_rate: z.number(),
-    // cold_start: z.number(),
-    instance: z.object({
-        index: z.number(),
-        vpu: z.number(),
-        memory: z.number(),
-        network_bandwidth: z.number(),
-        io_bandwidth: z.number(),
-        memory_bandwidth: z.number(),
-    }),
-    scheduling: z.object({
-        policy: z.string(),
-        max_io_concurrency: z.number(),
-        max_cpu_concurrency: z.number(),
-    }),
-})
+import { Button } from "./ui/button";
+import { ChevronsUpDown } from "lucide-react";
 
 export default function ArchitectureData() {
-    const { stage, increaseStage, data, setData } = React.useContext(InputContext)
+    const [arch, setArch] = React.useState<string>()
+
+    return (
+        <div className="flex flex-col items-center gap-8 w-[800px] max-h-dvh overflow-y-auto">
+            <h1>Architecture</h1>
+            <RadioGroup onValueChange={(value) => setArch(value)}>
+                {Object.values(ArchitectureType).map((archType) => (
+                    <div key={archType} className="flex items-center gap-3">
+                        <RadioGroupItem value={archType} id={archType} />
+                        <Label htmlFor={archType}>{archType}</Label>
+                    </div>
+                ))}
+            </RadioGroup>
+            {arch ? (
+                arch === ArchitectureType.DWAAS
+                    ? <DWAASForm />
+                    : arch === ArchitectureType.QAAS
+                        ? <QAASForm />
+                        : null
+            ) : null}
+        </div>
+    )
+}
+
+function DWAASForm() {
+    const { stage, setStage, data, setData } = React.useContext(InputContext)
+    const formSchema: z.ZodObject<ZodDWAAS> = creatArchitectureSchema(ArchitectureType.DWAAS) as z.ZodObject<ZodDWAAS>
+    const [nodes, setNodes] = React.useState<number | undefined>()
+    const [instance, setInsance] = React.useState<number | undefined>()
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            architecture: data.architecture,
-            nodes: data.nodes,
-            hit_rate: data.hit_rate,
-            instance: {
-                index: data.instance_index,
-                vpu: data.vpu,
-                memory: data.memory,
-                network_bandwidth: data.network_bandwidth,
-                io_bandwidth: data.io_bandwidth,
-                memory_bandwidth: data.memory_bandwidth,
-            },
-            scheduling: data.scheduling,
-        },
+            architecture: ArchitectureType.DWAAS,
+            dataset: data.dataset,
+        }
     })
 
     function onSubmit(values: z.infer<typeof formSchema>) {
         setData({
             ...data,
-            architecture: values.architecture,
-            nodes: values.nodes,
-            hit_rate: values.hit_rate,
-            instance_index: values.instance.index,
-            vpu: values.instance.vpu,
-            memory: values.instance.memory,
-            network_bandwidth: values.instance.network_bandwidth,
-            io_bandwidth: values.instance.io_bandwidth,
-            memory_bandwidth: values.instance.memory_bandwidth,
-            scheduling: {
-                policy: values.scheduling.policy,
-                max_io_concurrency: values.scheduling.max_io_concurrency,
-                max_cpu_concurrency: values.scheduling.max_cpu_concurrency,
-            }
+            scenarios: [
+                ...data.scenarios,
+                values
+            ]
         })
-        increaseStage(stage + 1)
+        setStage(stage + 1)
+    }
+
+    React.useEffect(() => {
+        if (instance !== undefined && nodes !== undefined) {
+            form.setValue("cpu_cores", instanceTypes[instance].cpu_cores + nodes)
+            form.setValue("network_bandwidth", instanceTypes[instance].network_bandwidth)
+            form.setValue("io_bandwidth", instanceTypes[instance].io_bandwidth)
+            form.setValue("memory_bandwidth", instanceTypes[instance].memory_bandwidth)
+            form.setValue("total_memory_capacity_mb", (instanceTypes[instance].memory * 1024) * nodes)
+
+            form.setValue("scheduling.policy", "sjf")
+            form.setValue("scheduling.max_io_concurrency", instanceTypes[instance].cpu_cores + nodes)
+            form.setValue("scheduling.max_cpu_concurrency", instanceTypes[instance].cpu_cores + nodes)
+        }
+    }, [nodes, instance])
+
+    return (
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-6">
+                <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                        control={form.control}
+                        name="nodes"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Number of Nodes</FormLabel>
+                                <FormControl>
+                                    <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => {
+                                        field.onChange(Number.parseInt(e.target.value))
+                                        setNodes(Number.parseInt(e.target.value))
+                                    }} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="hit_rate"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Hit Rate</FormLabel>
+                                <FormControl>
+                                    <Input type="number" defaultValue={field.value ? String(field.value) : undefined} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="instance"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Instance Type</FormLabel>
+                                <FormControl>
+                                    <Select
+                                        defaultValue={field.value ? String(field.value) : undefined}
+                                        onValueChange={(e) => {
+                                            field.onChange(Number.parseInt(e))
+                                            setInsance(Number.parseInt(e))
+                                        }}>
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Dropdown" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="0">ra3.xlplus</SelectItem>
+                                            <SelectItem value="1">ra3.4xlarge</SelectItem>
+                                            <SelectItem value="2">ra3.16xlarge</SelectItem>
+                                            <SelectItem value="3">c5d.xlarge</SelectItem>
+                                            <SelectItem value="4">c5d.2xlarge</SelectItem>
+                                            <SelectItem value="5">c5d.4xlarge</SelectItem>
+                                            <SelectItem value="6">ra3.xlplus (alt)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                </div>
+                {nodes !== undefined && instance !== undefined ?
+                    <Collapsible className="space-y-6">
+                        <CollapsibleTrigger asChild>
+                            <div className="flex items-center justify-between gap-3 px-4 bg-secondary rounded-md">
+                                <h4 className="text-sm font-semibold">
+                                    Optional Parameters
+                                </h4>
+                                <Button variant="ghost" size="icon" className="size-8">
+                                    <ChevronsUpDown />
+                                    <span className="sr-only">Toggle</span>
+                                </Button>
+                            </div>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="space-y-3">
+                            <div className="grid grid-cols-3 gap-3">
+                                <FormField
+                                    control={form.control}
+                                    name="cpu_cores"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>CPU Cores</FormLabel>
+                                            <FormControl>
+                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="network_bandwidth"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Network Bandwidth</FormLabel>
+                                            <FormControl>
+                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="io_bandwidth"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>I/O Bandwidth</FormLabel>
+                                            <FormControl>
+                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="memory_bandwidth"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Memory Bandwidth</FormLabel>
+                                            <FormControl>
+                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="total_memory_capacity_mb"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Total Memory Capacity</FormLabel>
+                                            <FormControl>
+                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                            <div className="grid grid-cols-3 gap-3">
+                                <FormField
+                                    control={form.control}
+                                    name="scheduling.policy"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Scheduling policy</FormLabel>
+                                            <FormControl>
+                                                <Select
+                                                    defaultValue={field.value ? String(field.value) : undefined}
+                                                    onValueChange={(e) => field.onChange(e)}>
+                                                    <SelectTrigger className="w-full">
+                                                        <SelectValue placeholder="Dropdown" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="fcfs">First Come First Serve</SelectItem>
+                                                        <SelectItem value="sjf">Shortest Job First</SelectItem>
+                                                        <SelectItem value="ljf">Longest Job First</SelectItem>
+                                                        <SelectItem value="multi_level">Multi Level</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="scheduling.max_io_concurrency"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Max concurrent I/O jobs</FormLabel>
+                                            <FormControl>
+                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="scheduling.max_cpu_concurrency"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Max concurrent CPU jobs</FormLabel>
+                                            <FormControl>
+                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        </CollapsibleContent>
+                    </Collapsible>
+                    : null}
+                <NextButton />
+            </form>
+        </Form>
+    )
+}
+
+function QAASForm() {
+    const { stage, setStage, data, setData } = React.useContext(InputContext)
+    const formSchema: z.ZodObject<ZodQAAS> = creatArchitectureSchema(ArchitectureType.QAAS) as z.ZodObject<ZodQAAS>
+
+    const form = useForm<z.infer<typeof formSchema>>({
+        resolver: zodResolver(formSchema),
+        defaultValues: {
+            architecture: ArchitectureType.QAAS,
+            dataset: data.dataset,
+            network_bandwidth: 10,
+        }
+    })
+
+    function onSubmit(values: z.infer<typeof formSchema>) {
+        setData({
+            ...data,
+            scenarios: [
+                ...data.scenarios,
+                values
+            ]
+        })
+        setStage(stage + 1)
     }
 
     return (
-        <div className="flex flex-col items-center gap-8">
-            <h1>Architecture</h1>
-            <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                    <div className="grid grid-cols-2">
-                        <FormField
-                            control={form.control}
-                            name="architecture"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Architecture</FormLabel>
-                                    <FormControl>
-                                        <RadioGroup defaultValue={field.value ? field.value : undefined} onValueChange={(e) => {
-                                            field.onChange(e)
-                                        }}>
-                                            <div className="flex items-center space-x-2">
-                                                <RadioGroupItem value="DWAAS" id="dwaas" />
-                                                <Label htmlFor="dwaas">DWaaS</Label>
-                                            </div>
-                                            <div className="flex items-center space-x-2">
-                                                <RadioGroupItem value="ELASTIC_POOL" id="elastic_pool" />
-                                                <Label htmlFor="elastic_pool">Elastic Pool</Label>
-                                            </div>
-                                            <div className="flex items-center space-x-2">
-                                                <RadioGroupItem value="QAAS" id="qaas" />
-                                                <Label htmlFor="qaas">QaaS</Label>
-                                            </div>
-                                        </RadioGroup>
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <FormField
-                            control={form.control}
-                            name="nodes"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Number of Nodes</FormLabel>
-                                    <FormControl>
-                                        <Input type="number" defaultValue={field.value ? field.value : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="hit_rate"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Hit Rate</FormLabel>
-                                    <FormControl>
-                                        <Input type="number" defaultValue={field.value ? field.value : undefined} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="instance"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Instance Type</FormLabel>
-                                    <FormControl>
-                                        <Select defaultValue={field.value && field.value.index ? field.value?.index.toString() : undefined} onValueChange={(e) => {
-                                            const instance = instanceTypes[Number.parseInt(e)]
-                                            if (instance) {
-                                                field.onChange({
-                                                    index: Number.parseInt(e),
-                                                    vpu: instance.cpu_cores,
-                                                    memory: instance.memory,
-                                                    network_bandwidth: instance.network_bandwidth,
-                                                    io_bandwidth: instance.io_bandwidth,
-                                                    memory_bandwidth: instance.memory_bandwidth,
-                                                })
-                                            }
-                                        }}>
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue placeholder="Dropdown" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="0">ra3.xlplus</SelectItem>
-                                                <SelectItem value="1">ra3.4xlarge</SelectItem>
-                                                <SelectItem value="2">ra3.16xlarge</SelectItem>
-                                                <SelectItem value="3">c5d.xlarge</SelectItem>
-                                                <SelectItem value="4">c5d.2xlarge</SelectItem>
-                                                <SelectItem value="5">c5d.4xlarge</SelectItem>
-                                                <SelectItem value="6">ra3.xlplus</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </FormControl>
-                                    <FormDescription>
-                                        <Button type="button" variant={"ghost"}>
-                                            <span className="text-blue-500 underline">Custom instance</span>
-                                        </Button>
-                                    </FormDescription>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="scheduling"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Scheduling Policy</FormLabel>
-                                    <FormControl>
-                                        <Select defaultValue={field.value?.policy} onValueChange={(e) => {
-                                            field.onChange({
-                                                policy: e,
-                                                max_io_concurrency: 16,
-                                                max_cpu_concurrency: 16,
-                                            })
-                                        }}>
-                                            <SelectTrigger className="w-full">
-                                                <SelectValue placeholder="Dropdown" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="fcfs">First-Come-First-Serve</SelectItem>
-                                                <SelectItem value="sjf">Shortest-Job-First</SelectItem>
-                                                <SelectItem value="ljf">Longest-Job-First</SelectItem>
-                                                <SelectItem value="mlq">Multi-Level Queue</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </FormControl>
-                                    <FormDescription>
-                                        <Button type="button" variant={"ghost"}>
-                                            <span className="text-blue-500 underline">Custom policy</span>
-                                        </Button>
-                                    </FormDescription>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                    </div>
-                    <NextButton />
-                </form>
-            </Form>
-        </div>
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <FormField
+                    control={form.control}
+                    name="network_bandwidth"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Network bandwidth</FormLabel>
+                            <FormControl>
+                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                <NextButton />
+            </form>
+        </Form>
     )
 }

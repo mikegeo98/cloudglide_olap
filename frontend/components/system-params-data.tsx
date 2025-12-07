@@ -15,7 +15,7 @@ const formSchema = z.object({
 })
 
 export default function SystemParametersData() {
-    const { stage, increaseStage, data, setData } = React.useContext(InputContext)
+    const { stage, setStage, data, setData } = React.useContext(InputContext)
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -39,7 +39,7 @@ export default function SystemParametersData() {
                 },
             },
         })
-        increaseStage(stage + 1)
+        setStage(stage + 1)
     }
 
     return (

@@ -25,23 +25,12 @@ import { HelpCircle, Trash2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { inputSchema } from "@/lib/zod-schemas";
 
-const formSchema = z.object({
-    file: z.file().optional(),
-    dataset: z.number().optional(),
-})
-    .superRefine((data, ctx) => {
-        if (data.file === undefined && (data.dataset === undefined || data.dataset === undefined)) {
-            ctx.addIssue({
-                code: "custom",
-                message: "Either upload a CSV file or use an alternative",
-                path: ["file"]
-            })
-        }
-    })
+const formSchema = inputSchema
 
 export default function InputData() {
-    const { stage, increaseStage, data, setData } = React.useContext(InputContext)
+    const { stage, setStage, data, setData } = React.useContext(InputContext)
     const [filename, setFilename] = React.useState<string | undefined>()
 
     const form = useForm<z.infer<typeof formSchema>>({
@@ -59,7 +48,7 @@ export default function InputData() {
             setData({ ...data, dataset: values.dataset ? values.dataset : undefined })
         }
 
-        increaseStage(stage + 1)
+        setStage(stage + 1)
     }
 
     React.useEffect(() => {
