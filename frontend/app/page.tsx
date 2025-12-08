@@ -15,7 +15,7 @@ export default function Page() {
   const { stage, setStage } = React.useContext(InputContext)
 
   return (
-    <div className="flex flex-col w-full min-h-screen max-h-screen items-center justify-start bg-zinc-50 font-sans dark:bg-black">
+    <div className="flex flex-col w-full min-h-screen max-h-screen items-center justify-start overflow-hidden bg-zinc-50 font-sans dark:bg-black">
       <div className="flex w-full max-w-7xl justify-evenly items-center py-4 m-0 bg-zinc-50 font-sans dark:bg-black">
         <button onClick={() => stage > 0 ? setStage(0) : null} className={cn(stage === 0 ? "border-b-2 border-blue-700" : "", "m-0 w-1/5 text-center")}><b>1</b> - Input Data {stage > 0 ? <Check size={17} className="inline text-green-700" /> : null}</button>
         <button onClick={() => stage > 1 ? setStage(1) : null} className={cn(stage === 1 ? "border-b-2 border-blue-700" : stage < 1 ? "text-muted-foreground" : "", "m-0 w-1/5 text-center")}><b>2</b> - Architecture {stage > 1 ? <Check size={17} className="inline text-green-700" /> : null}</button>

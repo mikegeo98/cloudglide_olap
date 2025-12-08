@@ -25,7 +25,7 @@ export const inputSchema = z.object({
 
 
 // Second page: Architecture Schema
-export const creatArchitectureSchema = (archType: typeof ArchitectureType[keyof typeof ArchitectureType]): z.ZodObject<z.ZodRawShape> => {
+export const createArchitectureSchema = (archType: typeof ArchitectureType[keyof typeof ArchitectureType]): z.ZodObject<z.ZodRawShape> => {
     switch (archType) {
         case ArchitectureType.DWAAS:
             return z.object({

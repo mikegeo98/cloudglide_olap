@@ -20,85 +20,175 @@ import {
 } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
 
 import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArchitectureType, creatArchitectureSchema, ZodDWAAS, ZodDWAASAutoscaling, ZodElasticPool, ZodQAAS } from "@/lib/zod-schemas";
+import { ArchitectureType, createArchitectureSchema, ZodDWAAS, ZodDWAASAutoscaling, ZodElasticPool, ZodQAAS } from "@/lib/zod-schemas";
 import { instanceTypes } from "@/lib/config";
-import { ChevronsUpDown } from "lucide-react";
+import { ChevronsUpDown, Plus } from "lucide-react";
 
 export default function ArchitectureData() {
+    const { data, stage, setStage } = React.useContext(InputContext)
     const [arch, setArch] = React.useState<string>()
+    const [add, setAdd] = React.useState(false)
 
     return (
-        <div className="flex flex-col items-center gap-8 w-[800px] max-h-dvh overflow-y-auto">
+        <div className="flex flex-col items-center gap-8 w-[800px] px-6 max-h-full overflow-y-auto">
             <h1>Architecture</h1>
-            <RadioGroup onValueChange={(value) => setArch(value)}>
-                {Object.values(ArchitectureType).map((archType) => (
-                    <div key={archType} className="flex items-center gap-3">
-                        <RadioGroupItem value={archType} id={archType} />
-                        <Label htmlFor={archType}>{archType}</Label>
+            {data.scenarios.map((scenario, index) => {
+                let form = null
+                switch (scenario.architecture) {
+                    case ArchitectureType.DWAAS:
+                        form = <DWAASForm key={index} scenario={scenario} />
+                        break
+                    case ArchitectureType.DWAAS_AUTOSCALING:
+                        form = <DWAASAutoscalingForm key={index} scenario={scenario} />
+                        break
+                    case ArchitectureType.ELASTIC_POOL:
+                        form = <ElasticPoolForm key={index} scenario={scenario} />
+                        break
+                    case ArchitectureType.QAAS:
+                        form = <QAASForm key={index} scenario={scenario} />
+                        break
+                    default:
+                        return null;
+                }
+
+                return (
+                    <Collapsible key={index} className="w-full space-y-6">
+                        <CollapsibleTrigger asChild>
+                            <div className="flex items-center justify-between gap-3 mb-0 rounded-md">
+                                <h4 className="text-sm font-semibold">
+                                    {`Scenario ${index + 1}: ${scenario.architecture}`}
+                                </h4>
+                                <Button variant="ghost" size="icon" className="size-8">
+                                    <ChevronsUpDown />
+                                    <span className="sr-only">Toggle</span>
+                                </Button>
+                            </div>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="mt-3 space-y-3">
+                            {form}
+                        </CollapsibleContent>
+                    </Collapsible>
+                )
+            })}
+            {data.scenarios.length > 0 ? (
+                <>
+                    <Separator />
+                    <div className="w-full flex justify-between">
+                        <Button variant="default" disabled={add} onClick={() => setAdd(true)}>
+                            <Plus />
+                        </Button>
+                        <NextButton rightOnClick={() => setStage(stage + 1)} />
                     </div>
-                ))}
-            </RadioGroup>
-            {arch ? (
-                (() => {
-                    switch (arch) {
-                        case ArchitectureType.DWAAS:
-                            return <DWAASForm />;
-                        case ArchitectureType.DWAAS_AUTOSCALING:
-                            return <DWAASAutoscalingForm />;
-                        case ArchitectureType.ELASTIC_POOL:
-                            return <ElasticPoolForm />;
-                        case ArchitectureType.QAAS:
-                            return <QAASForm />;
-                        default:
-                            return null;
-                    }
-                })()
+                </>
+            ) : null}
+            {add || data.scenarios.length === 0 ? (
+                <>
+                    <RadioGroup onValueChange={(value) => setArch(value)}>
+                        {Object.values(ArchitectureType).map((archType) => (
+                            <div key={archType} className="flex items-center gap-3">
+                                <RadioGroupItem value={archType} id={archType} />
+                                <Label htmlFor={archType}>{archType}</Label>
+                            </div>
+                        ))}
+                    </RadioGroup>
+                    {arch ? (
+                        (() => {
+                            switch (arch) {
+                                case ArchitectureType.DWAAS:
+                                    return <DWAASForm />;
+                                case ArchitectureType.DWAAS_AUTOSCALING:
+                                    return <DWAASAutoscalingForm />;
+                                case ArchitectureType.ELASTIC_POOL:
+                                    return <ElasticPoolForm />;
+                                case ArchitectureType.QAAS:
+                                    return <QAASForm />;
+                                default:
+                                    return null;
+                            }
+                        })()
+                    ) : null}
+                </>
             ) : null}
         </div>
     )
 }
 
-function DWAASForm() {
+function DWAASForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS>> }) {
     const { stage, setStage, data, setData } = React.useContext(InputContext)
-    const formSchema: z.ZodObject<ZodDWAAS> = creatArchitectureSchema(ArchitectureType.DWAAS) as z.ZodObject<ZodDWAAS>
+    const formSchema: z.ZodObject<ZodDWAAS> = createArchitectureSchema(ArchitectureType.DWAAS) as z.ZodObject<ZodDWAAS>
     const [nodes, setNodes] = React.useState<number | undefined>()
-    const [instance, setInsance] = React.useState<number | undefined>()
+    const [instance, setInstance] = React.useState<number | undefined>()
+    const [loading, setLoading] = React.useState(false)
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            architecture: ArchitectureType.DWAAS,
-            dataset: data.dataset,
+            ...(scenario ? scenario : {
+                architecture: ArchitectureType.DWAAS,
+                dataset: data.dataset,
+                scheduling: {
+                    policy: "sjf",
+                },
+            }),
         }
     })
 
     function onSubmit(values: z.infer<typeof formSchema>) {
-        setData({
-            ...data,
-            scenarios: [
-                ...data.scenarios,
-                values
-            ]
-        })
-        setStage(stage + 1)
+        if (scenario) {
+            setLoading(true)
+            setData({
+                ...data,
+                scenarios: data.scenarios.map((s) =>
+                    s === scenario ? values : s
+                ),
+            })
+
+            // Simulate a delay for loading
+            // So the user can be sure the data is saved
+            setTimeout(() => {
+                setLoading(false)
+            }, 300)
+        } else {
+            setData({
+                ...data,
+                scenarios: [
+                    ...data.scenarios,
+                    values
+                ]
+            })
+            setStage(stage + 1)
+        }
     }
 
     React.useEffect(() => {
-        if (instance !== undefined && nodes !== undefined) {
-            form.setValue("cpu_cores", instanceTypes[instance].cpu_cores * nodes)
+        if (instance !== undefined) {
             form.setValue("network_bandwidth", instanceTypes[instance].network_bandwidth)
             form.setValue("io_bandwidth", instanceTypes[instance].io_bandwidth)
             form.setValue("memory_bandwidth", instanceTypes[instance].memory_bandwidth)
-            form.setValue("total_memory_capacity_mb", (instanceTypes[instance].memory * 1024) * nodes)
 
-            form.setValue("scheduling.policy", "sjf")
             form.setValue("scheduling.max_io_concurrency", instanceTypes[instance].cpu_cores)
             form.setValue("scheduling.max_cpu_concurrency", instanceTypes[instance].cpu_cores)
+        }
+
+        // TODO: maybe refactor this to a more generic solution
+        if (nodes !== undefined || instance !== undefined) {
+            if (nodes !== undefined && instance === undefined && scenario) {
+                form.setValue("cpu_cores", instanceTypes[scenario.instance].cpu_cores * nodes)
+                form.setValue("total_memory_capacity_mb", (instanceTypes[scenario.instance].memory * 1024) * nodes)
+            } else if (nodes === undefined && instance !== undefined && scenario) {
+                form.setValue("cpu_cores", instanceTypes[instance].cpu_cores * scenario.nodes)
+                form.setValue("total_memory_capacity_mb", (instanceTypes[instance].memory * 1024) * scenario.nodes)
+            } else if (nodes !== undefined && instance !== undefined) {
+                form.setValue("cpu_cores", instanceTypes[instance].cpu_cores * nodes)
+                form.setValue("total_memory_capacity_mb", (instanceTypes[instance].memory * 1024) * nodes)
+            }
         }
     }, [nodes, instance])
 
@@ -113,7 +203,7 @@ function DWAASForm() {
                             <FormItem>
                                 <FormLabel>Number of Nodes</FormLabel>
                                 <FormControl>
-                                    <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => {
+                                    <Input type="number" defaultValue={field.value} onChange={(e) => {
                                         field.onChange(Number.parseInt(e.target.value))
                                         setNodes(Number.parseInt(e.target.value))
                                     }} />
@@ -129,7 +219,7 @@ function DWAASForm() {
                             <FormItem>
                                 <FormLabel>Hit Rate</FormLabel>
                                 <FormControl>
-                                    <Input type="number" defaultValue={field.value ? String(field.value) : undefined} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
+                                    <Input type="number" defaultValue={field.value} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -143,10 +233,10 @@ function DWAASForm() {
                                 <FormLabel>Instance Type</FormLabel>
                                 <FormControl>
                                     <Select
-                                        defaultValue={field.value ? String(field.value) : undefined}
+                                        defaultValue={field.value?.toString()}
                                         onValueChange={(e) => {
                                             field.onChange(Number.parseInt(e))
-                                            setInsance(Number.parseInt(e))
+                                            setInstance(Number.parseInt(e))
                                         }}>
                                         <SelectTrigger className="w-full">
                                             <SelectValue placeholder="Dropdown" />
@@ -167,7 +257,7 @@ function DWAASForm() {
                         )}
                     />
                 </div>
-                {nodes !== undefined && instance !== undefined ?
+                {(nodes !== undefined && instance !== undefined) || scenario ?
                     <Collapsible className="space-y-6">
                         <CollapsibleTrigger asChild>
                             <div className="flex items-center justify-between gap-3 px-4 bg-secondary rounded-md">
@@ -189,7 +279,7 @@ function DWAASForm() {
                                         <FormItem>
                                             <FormLabel>CPU Cores</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -202,7 +292,7 @@ function DWAASForm() {
                                         <FormItem>
                                             <FormLabel>Network Bandwidth</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -215,7 +305,7 @@ function DWAASForm() {
                                         <FormItem>
                                             <FormLabel>I/O Bandwidth</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -228,7 +318,7 @@ function DWAASForm() {
                                         <FormItem>
                                             <FormLabel>Memory Bandwidth</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -241,7 +331,7 @@ function DWAASForm() {
                                         <FormItem>
                                             <FormLabel>Total Memory Capacity</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -257,8 +347,8 @@ function DWAASForm() {
                                             <FormLabel>Scheduling policy</FormLabel>
                                             <FormControl>
                                                 <Select
-                                                    defaultValue={field.value ? String(field.value) : undefined}
-                                                    onValueChange={(e) => field.onChange(e)}>
+                                                    defaultValue={field.value}
+                                                    onValueChange={field.onChange}>
                                                     <SelectTrigger className="w-full">
                                                         <SelectValue placeholder="Dropdown" />
                                                     </SelectTrigger>
@@ -281,7 +371,7 @@ function DWAASForm() {
                                         <FormItem>
                                             <FormLabel>Max concurrent I/O jobs</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -294,7 +384,7 @@ function DWAASForm() {
                                         <FormItem>
                                             <FormLabel>Max concurrent CPU jobs</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -304,50 +394,86 @@ function DWAASForm() {
                         </CollapsibleContent>
                     </Collapsible>
                     : null}
-                <NextButton />
+                {scenario ? (
+                    <Button type="submit" variant="default">
+                        {loading ? <Spinner /> : "save"}
+                    </Button>
+                ) : <NextButton />}
             </form>
         </Form>
     )
 }
 
-function DWAASAutoscalingForm() {
+function DWAASAutoscalingForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS>> }) {
     const { stage, setStage, data, setData } = React.useContext(InputContext)
-    const formSchema: z.ZodObject<ZodDWAASAutoscaling> = creatArchitectureSchema(ArchitectureType.DWAAS_AUTOSCALING) as z.ZodObject<ZodDWAASAutoscaling>
+    const formSchema: z.ZodObject<ZodDWAASAutoscaling> = createArchitectureSchema(ArchitectureType.DWAAS_AUTOSCALING) as z.ZodObject<ZodDWAASAutoscaling>
     const [nodes, setNodes] = React.useState<number | undefined>()
     const [instance, setInsance] = React.useState<number | undefined>()
+    const [loading, setLoading] = React.useState(false)
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            architecture: ArchitectureType.DWAAS_AUTOSCALING,
-            dataset: data.dataset,
-
-            use_spot_instances: false,
+            ...(scenario ? scenario : {
+                architecture: ArchitectureType.DWAAS_AUTOSCALING,
+                dataset: data.dataset,
+                use_spot_instances: false,
+                scheduling: {
+                    policy: "sjf",
+                },
+            }),
         }
     })
 
     function onSubmit(values: z.infer<typeof formSchema>) {
-        setData({
-            ...data,
-            scenarios: [
-                ...data.scenarios,
-                values
-            ]
-        })
-        setStage(stage + 1)
+        if (scenario) {
+            setLoading(true)
+            setData({
+                ...data,
+                scenarios: data.scenarios.map((s) =>
+                    s === scenario ? values : s
+                ),
+            })
+
+            // Simulate a delay for loading
+            // So the user can be sure the data is saved
+            setTimeout(() => {
+                setLoading(false)
+            }, 300)
+        } else {
+            setData({
+                ...data,
+                scenarios: [
+                    ...data.scenarios,
+                    values
+                ]
+            })
+            setStage(stage + 1)
+        }
     }
 
     React.useEffect(() => {
-        if (instance !== undefined && nodes !== undefined) {
-            form.setValue("cpu_cores", instanceTypes[instance].cpu_cores * nodes)
+        if (instance !== undefined) {
             form.setValue("network_bandwidth", instanceTypes[instance].network_bandwidth)
             form.setValue("io_bandwidth", instanceTypes[instance].io_bandwidth)
             form.setValue("memory_bandwidth", instanceTypes[instance].memory_bandwidth)
-            form.setValue("total_memory_capacity_mb", (instanceTypes[instance].memory * 1024) * nodes)
 
-            form.setValue("scheduling.policy", "sjf")
             form.setValue("scheduling.max_io_concurrency", instanceTypes[instance].cpu_cores)
             form.setValue("scheduling.max_cpu_concurrency", instanceTypes[instance].cpu_cores)
+        }
+
+        // TODO: maybe refactor this to a more generic solution
+        if (nodes !== undefined || instance !== undefined) {
+            if (nodes !== undefined && instance === undefined && scenario) {
+                form.setValue("cpu_cores", instanceTypes[scenario.instance].cpu_cores * nodes)
+                form.setValue("total_memory_capacity_mb", (instanceTypes[scenario.instance].memory * 1024) * nodes)
+            } else if (nodes === undefined && instance !== undefined && scenario) {
+                form.setValue("cpu_cores", instanceTypes[instance].cpu_cores * scenario.nodes)
+                form.setValue("total_memory_capacity_mb", (instanceTypes[instance].memory * 1024) * scenario.nodes)
+            } else if (nodes !== undefined && instance !== undefined) {
+                form.setValue("cpu_cores", instanceTypes[instance].cpu_cores * nodes)
+                form.setValue("total_memory_capacity_mb", (instanceTypes[instance].memory * 1024) * nodes)
+            }
         }
     }, [nodes, instance])
 
@@ -362,7 +488,7 @@ function DWAASAutoscalingForm() {
                             <FormItem>
                                 <FormLabel>Nodes</FormLabel>
                                 <FormControl>
-                                    <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => {
+                                    <Input type="number" defaultValue={field.value} onChange={(e) => {
                                         field.onChange(Number.parseInt(e.target.value))
                                         setNodes(Number.parseInt(e.target.value))
                                     }} />
@@ -378,7 +504,7 @@ function DWAASAutoscalingForm() {
                             <FormItem>
                                 <FormLabel>Cache Hit Rate</FormLabel>
                                 <FormControl>
-                                    <Input type="number" defaultValue={field.value ? String(field.value) : undefined} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
+                                    <Input type="number" defaultValue={field.value} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -391,7 +517,7 @@ function DWAASAutoscalingForm() {
                             <FormItem>
                                 <FormLabel>Cold Start Delay in seconds</FormLabel>
                                 <FormControl>
-                                    <Input type="number" defaultValue={field.value ? String(field.value) : undefined} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
+                                    <Input type="number" defaultValue={field.value} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -405,7 +531,7 @@ function DWAASAutoscalingForm() {
                                 <FormLabel>Instance Type</FormLabel>
                                 <FormControl>
                                     <Select
-                                        defaultValue={field.value ? String(field.value) : undefined}
+                                        defaultValue={field.value?.toString()}
                                         onValueChange={(e) => {
                                             field.onChange(Number.parseInt(e))
                                             setInsance(Number.parseInt(e))
@@ -435,10 +561,7 @@ function DWAASAutoscalingForm() {
                             <FormItem>
                                 <FormLabel>Scaling Policy</FormLabel>
                                 <FormControl>
-                                    <Select
-                                        defaultValue={field.value ? String(field.value) : undefined}
-                                        onValueChange={(e) => field.onChange(e)}
-                                    >
+                                    <Select defaultValue={field.value} onValueChange={field.onChange}>
                                         <SelectTrigger className="w-full">
                                             <SelectValue placeholder="Dropdown" />
                                         </SelectTrigger>
@@ -454,7 +577,7 @@ function DWAASAutoscalingForm() {
                         )}
                     />
                 </div>
-                {nodes !== undefined && instance !== undefined ?
+                {(nodes !== undefined && instance !== undefined) || scenario ?
                     <Collapsible className="space-y-6">
                         <CollapsibleTrigger asChild>
                             <div className="flex items-center justify-between gap-3 px-4 bg-secondary rounded-md">
@@ -476,7 +599,7 @@ function DWAASAutoscalingForm() {
                                         <FormItem>
                                             <FormLabel>Network Bandwidth</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -489,7 +612,7 @@ function DWAASAutoscalingForm() {
                                         <FormItem>
                                             <FormLabel>I/O Bandwidth</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -502,7 +625,7 @@ function DWAASAutoscalingForm() {
                                         <FormItem>
                                             <FormLabel>Memory Bandwidth</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -515,7 +638,7 @@ function DWAASAutoscalingForm() {
                                         <FormItem>
                                             <FormLabel>Total Memory Capacity</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -544,7 +667,7 @@ function DWAASAutoscalingForm() {
                                             <FormLabel>Scheduling policy</FormLabel>
                                             <FormControl>
                                                 <Select
-                                                    defaultValue={field.value ? String(field.value) : undefined}
+                                                    defaultValue={field.value}
                                                     onValueChange={(e) => field.onChange(e)}>
                                                     <SelectTrigger className="w-full">
                                                         <SelectValue placeholder="Dropdown" />
@@ -568,7 +691,7 @@ function DWAASAutoscalingForm() {
                                         <FormItem>
                                             <FormLabel>Max concurrent I/O jobs</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -581,7 +704,7 @@ function DWAASAutoscalingForm() {
                                         <FormItem>
                                             <FormLabel>Max concurrent CPU jobs</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -591,44 +714,67 @@ function DWAASAutoscalingForm() {
                         </CollapsibleContent>
                     </Collapsible>
                     : null}
-                <NextButton />
+                {scenario ? (
+                    <Button type="submit" variant="default">
+                        {loading ? <Spinner /> : "save"}
+                    </Button>
+                ) : <NextButton />}
             </form>
         </Form>
     )
 }
 
-function ElasticPoolForm() {
+function ElasticPoolForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS>> }) {
     const { stage, setStage, data, setData } = React.useContext(InputContext)
-    const formSchema: z.ZodObject<ZodElasticPool> = creatArchitectureSchema(ArchitectureType.ELASTIC_POOL) as z.ZodObject<ZodElasticPool>
+    const formSchema: z.ZodObject<ZodElasticPool> = createArchitectureSchema(ArchitectureType.ELASTIC_POOL) as z.ZodObject<ZodElasticPool>
     const [vpu, setVPUs] = React.useState<number | undefined>()
+    const [loading, setLoading] = React.useState(false)
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            architecture: ArchitectureType.ELASTIC_POOL,
-            dataset: data.dataset,
+            ...(scenario ? scenario : {
+                architecture: ArchitectureType.ELASTIC_POOL,
+                dataset: data.dataset,
 
-            network_bandwidth: 10000,
-            io_bandwidth: 1200,
-            memory_bandwidth: 40000,
-            total_memory_capacity_mb: 96000,
-            scheduling: {
-                policy: "sjf",
-                max_io_concurrency: 32,
-                max_cpu_concurrency: 32,
-            }
+                network_bandwidth: 10000,
+                io_bandwidth: 1200,
+                memory_bandwidth: 40000,
+                total_memory_capacity_mb: 96000,
+                scheduling: {
+                    policy: "sjf",
+                    max_io_concurrency: 32,
+                    max_cpu_concurrency: 32,
+                }
+            }),
         }
     })
 
     function onSubmit(values: z.infer<typeof formSchema>) {
-        setData({
-            ...data,
-            scenarios: [
-                ...data.scenarios,
-                values
-            ]
-        })
-        setStage(stage + 1)
+        if (scenario) {
+            setLoading(true)
+            setData({
+                ...data,
+                scenarios: data.scenarios.map((s) =>
+                    s === scenario ? values : s
+                ),
+            })
+
+            // Simulate a delay for loading
+            // So the user can be sure the data is saved
+            setTimeout(() => {
+                setLoading(false)
+            }, 300)
+        } else {
+            setData({
+                ...data,
+                scenarios: [
+                    ...data.scenarios,
+                    values
+                ]
+            })
+            setStage(stage + 1)
+        }
     }
 
     React.useEffect(() => {
@@ -649,7 +795,7 @@ function ElasticPoolForm() {
                             <FormItem>
                                 <FormLabel>Virtual Processing Units (RPUs)</FormLabel>
                                 <FormControl>
-                                    <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => {
+                                    <Input type="number" defaultValue={field.value} onChange={(e) => {
                                         field.onChange(Number.parseInt(e.target.value))
                                         setVPUs(Number.parseInt(e.target.value))
                                     }} />
@@ -665,7 +811,7 @@ function ElasticPoolForm() {
                             <FormItem>
                                 <FormLabel>Cache Hit Rate</FormLabel>
                                 <FormControl>
-                                    <Input type="number" defaultValue={field.value ? String(field.value) : undefined} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
+                                    <Input type="number" defaultValue={field.value} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -678,7 +824,7 @@ function ElasticPoolForm() {
                             <FormItem>
                                 <FormLabel>Cold Start Delay in seconds</FormLabel>
                                 <FormControl>
-                                    <Input type="number" defaultValue={field.value ? String(field.value) : undefined} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
+                                    <Input type="number" defaultValue={field.value} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -691,10 +837,7 @@ function ElasticPoolForm() {
                             <FormItem>
                                 <FormLabel>Scaling Policy</FormLabel>
                                 <FormControl>
-                                    <Select
-                                        defaultValue={field.value ? String(field.value) : undefined}
-                                        onValueChange={(e) => field.onChange(e)}
-                                    >
+                                    <Select defaultValue={field.value} onValueChange={field.onChange}>
                                         <SelectTrigger className="w-full">
                                             <SelectValue placeholder="Dropdown" />
                                         </SelectTrigger>
@@ -710,7 +853,7 @@ function ElasticPoolForm() {
                         )}
                     />
                 </div>
-                {vpu !== undefined ?
+                {vpu !== undefined || scenario ?
                     <Collapsible className="space-y-6">
                         <CollapsibleTrigger asChild>
                             <div className="flex items-center justify-between gap-3 px-4 bg-secondary rounded-md">
@@ -732,7 +875,7 @@ function ElasticPoolForm() {
                                         <FormItem>
                                             <FormLabel>Network Bandwidth</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -745,7 +888,7 @@ function ElasticPoolForm() {
                                         <FormItem>
                                             <FormLabel>I/O Bandwidth</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -758,7 +901,7 @@ function ElasticPoolForm() {
                                         <FormItem>
                                             <FormLabel>Memory Bandwidth</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -771,7 +914,7 @@ function ElasticPoolForm() {
                                         <FormItem>
                                             <FormLabel>Total Memory Capacity</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -787,8 +930,8 @@ function ElasticPoolForm() {
                                             <FormLabel>Scheduling policy</FormLabel>
                                             <FormControl>
                                                 <Select
-                                                    defaultValue={field.value ? String(field.value) : undefined}
-                                                    onValueChange={(e) => field.onChange(e)}>
+                                                    defaultValue={field.value}
+                                                    onValueChange={field.onChange}>
                                                     <SelectTrigger className="w-full">
                                                         <SelectValue placeholder="Dropdown" />
                                                     </SelectTrigger>
@@ -811,7 +954,7 @@ function ElasticPoolForm() {
                                         <FormItem>
                                             <FormLabel>Max concurrent I/O jobs</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -824,7 +967,7 @@ function ElasticPoolForm() {
                                         <FormItem>
                                             <FormLabel>Max concurrent CPU jobs</FormLabel>
                                             <FormControl>
-                                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -834,34 +977,57 @@ function ElasticPoolForm() {
                         </CollapsibleContent>
                     </Collapsible>
                     : null}
-                <NextButton />
+                {scenario ? (
+                    <Button type="submit" variant="default">
+                        {loading ? <Spinner /> : "save"}
+                    </Button>
+                ) : <NextButton />}
             </form>
         </Form>
     )
 }
 
-function QAASForm() {
+function QAASForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS>> }) {
     const { stage, setStage, data, setData } = React.useContext(InputContext)
-    const formSchema: z.ZodObject<ZodQAAS> = creatArchitectureSchema(ArchitectureType.QAAS) as z.ZodObject<ZodQAAS>
+    const formSchema: z.ZodObject<ZodQAAS> = createArchitectureSchema(ArchitectureType.QAAS) as z.ZodObject<ZodQAAS>
+    const [loading, setLoading] = React.useState(false)
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            architecture: ArchitectureType.QAAS,
-            dataset: data.dataset,
-            network_bandwidth: 10,
+            ...(scenario ? scenario : {
+                architecture: ArchitectureType.QAAS,
+                dataset: data.dataset,
+                network_bandwidth: 10,
+            }),
         }
     })
 
     function onSubmit(values: z.infer<typeof formSchema>) {
-        setData({
-            ...data,
-            scenarios: [
-                ...data.scenarios,
-                values
-            ]
-        })
-        setStage(stage + 1)
+        if (scenario) {
+            setLoading(true)
+            setData({
+                ...data,
+                scenarios: data.scenarios.map((s) =>
+                    s === scenario ? values : s
+                ),
+            })
+
+            // Simulate a delay for loading
+            // So the user can be sure the data is saved
+            setTimeout(() => {
+                setLoading(false)
+            }, 300)
+        } else {
+            setData({
+                ...data,
+                scenarios: [
+                    ...data.scenarios,
+                    values
+                ]
+            })
+            setStage(stage + 1)
+        }
     }
 
     return (
@@ -874,13 +1040,17 @@ function QAASForm() {
                         <FormItem>
                             <FormLabel>Network bandwidth</FormLabel>
                             <FormControl>
-                                <Input type="number" defaultValue={field.value ? String(field.value) : undefined} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                <Input type="number" defaultValue={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
                     )}
                 />
-                <NextButton />
+                {scenario ? (
+                    <Button type="submit" variant="default">
+                        {loading ? <Spinner /> : "save"}
+                    </Button>
+                ) : <NextButton />}
             </form>
         </Form>
     )
