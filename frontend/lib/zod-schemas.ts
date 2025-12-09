@@ -1,12 +1,5 @@
 import z from "zod";
-import { instanceTypes } from "./config";
-
-export const ArchitectureType = {
-    DWAAS: "DWAAS",
-    DWAAS_AUTOSCALING: "DWAAS_AUTOSCALING",
-    ELASTIC_POOL: "ELASTIC_POOL",
-    QAAS: "QAAS",
-};
+import { ArchitectureType, instanceTypes } from "./config";
 
 // First page: Input Schema
 export const inputSchema = z.object({
@@ -102,6 +95,47 @@ export const createArchitectureSchema = (archType: typeof ArchitectureType[keyof
             throw new Error(`Unknown architecture type: ${archType}`);
     }
 };
+
+// Third page: System Parameters Schema
+export const sysParamsSchema = z.object({
+    simulation: z.object({
+        scale_factor_min: z.number(),
+        scale_factor_max: z.number(),
+        shuffle_percentage_min: z.number(),
+        shuffle_percentage_max: z.number(),
+        interrupt_probability: z.number(),
+        interrupt_duration: z.number(),
+        logging_interval: z.number(),
+        default_max_duration: z.number(),
+        default_estimator: z.string(),
+        pm_p: z.number(),
+        delta: z.number(),
+        queue_agg: z.string(),
+        materialization_fraction: z.number(),
+        parallelizable_portion: z.number(),
+        s3_bandwidth: z.number(),
+    }),
+    dwaas: z.object({
+        cost_per_second_redshift: z.number(),
+        spot_discount: z.number(),
+        use_spot_instances: z.boolean(),
+        cold_start_delay: z.number(),
+    }),
+    elastic_pool: z.object({
+        cost_per_rpu_hour: z.number(),
+        cache_warmup_gamma: z.number(),
+        cold_start_delay: z.number(),
+    }),
+    qaas: z.object({
+        cost_per_slot_hour: z.number(),
+        qaas_cost_per_tb: z.number(),
+        qaas_io_per_core_bw: z.number(),
+        qaas_shuffle_bw_per_core: z.number(),
+        qaas_base_cores: z.number(),
+        qaas_base_time_limit: z.number(),
+        core_alloc_window: z.number(),
+    }),
+});
 
 export type ZodDWAAS = {
     architecture: z.ZodLiteral<string>;

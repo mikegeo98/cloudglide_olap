@@ -1,3 +1,10 @@
+export const ArchitectureType = {
+    DWAAS: "DWAAS",
+    DWAAS_AUTOSCALING: "DWAAS_AUTOSCALING",
+    ELASTIC_POOL: "ELASTIC_POOL",
+    QAAS: "QAAS",
+}
+
 export interface InstanceConfig {
     cpu_cores: number;
     memory: number;       // in GB

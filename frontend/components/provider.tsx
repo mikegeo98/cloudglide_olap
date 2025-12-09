@@ -39,7 +39,7 @@ export default function Provider({
         const j = {
             defaults: data.defaults,
             scenarios: data.scenarios.map((scenario, index) => {
-                scenario.name = "scenario_" + index
+                scenario.name = "scenario" + index
                 return scenario
             }),
         }

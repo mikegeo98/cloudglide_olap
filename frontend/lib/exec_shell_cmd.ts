@@ -19,7 +19,7 @@ export default async function runSimulation(input_csv: File | undefined, input_j
     // Execute the recently saved input.json file
     const scenarios = JSON.parse(input_json).scenarios
     for (const scenario of scenarios) {
-        const { stdout, stderr } = await exec("cd .. && python main.py " + scenario.name + " " + path)
+        const { stdout, stderr } = await exec("cd .. && python main.py " + scenario.name + " " + path + " --output_prefix cloudglide/output_simulation/" + scenario.name)
         console.log("stdout:", stdout)
         console.error("stderr:", stderr)
     }

@@ -27,8 +27,8 @@ import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArchitectureType, createArchitectureSchema, ZodDWAAS, ZodDWAASAutoscaling, ZodElasticPool, ZodQAAS } from "@/lib/zod-schemas";
-import { instanceTypes } from "@/lib/config";
+import { createArchitectureSchema, ZodDWAAS, ZodDWAASAutoscaling, ZodElasticPool, ZodQAAS } from "@/lib/zod-schemas";
+import { ArchitectureType, instanceTypes } from "@/lib/config";
 import { ChevronsUpDown, Plus } from "lucide-react";
 
 export default function ArchitectureData() {
