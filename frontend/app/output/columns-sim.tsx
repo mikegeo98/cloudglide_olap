@@ -1,7 +1,5 @@
 "use client"
 
-import { Checkbox } from "@/components/ui/checkbox"
-
 import { ColumnDef } from "@tanstack/react-table"
 
 export type Simulation = {
@@ -57,25 +55,33 @@ export const columns: ColumnDef<Simulation>[] = [
     {
         accessorKey: "io",
         header: "IO",
+        cell: ({ row }) => row.original.io.toFixed(4)
     },
     {
         accessorKey: "cpu",
         header: "CPU",
+        cell: ({ row }) => row.original.cpu.toFixed(4)
     },
     {
         accessorKey: "shuffle",
         header: "Shuffle",
+        cell: ({ row }) => row.original.shuffle.toFixed(4)
     },
     {
         accessorKey: "query_duration_with_queue",
-        header: "Query Duration with Queue",
+        header: "Query Duration with queueing",
+        cell: ({ row }) => row.original.query_duration_with_queue.toFixed(4)
     },
     {
         accessorKey: "query_duration",
         header: "Query Duration",
+        cell: ({ row }) => row.original.query_duration.toFixed(4)
     },
     {
         accessorKey: "mon_cost",
         header: "Monetary Cost",
+        cell: ({ row }) => {
+            return "$" + row.original.mon_cost.toFixed(4)
+        },
     },
 ]

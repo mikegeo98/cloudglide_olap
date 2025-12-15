@@ -1,4 +1,4 @@
-import { csvJSON } from "@/lib/utils";
+import { csvToSimulation } from "@/lib/utils";
 import { promises as fs } from "fs";
 import { Simulation } from "./columns-sim";
 import Selection from "./selection";
@@ -8,8 +8,8 @@ async function getData(): Promise<{ data: Simulation[][], files: string[] }> {
     const files = await fs.readdir(process.cwd() + "/../cloudglide/output_simulation")
     for (const file of files) {
         const content = await fs.readFile(process.cwd() + "/../cloudglide/output_simulation/" + file, "utf8");
-        const obj = csvJSON(content)
-        sims.push(JSON.parse(obj))
+        const obj = csvToSimulation(content)
+        sims.push(obj)
     }
     return { data: sims, files: files }
 }
