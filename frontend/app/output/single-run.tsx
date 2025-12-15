@@ -53,10 +53,8 @@ export default function SingleRun({ data }: { data: Simulation[][] }) {
     const [histoData, setHistoData] = React.useState<{ sec: number, finishedCount: number }[]>([])
     const [loading, setLoading] = React.useState(false)
 
-    function handleSelectChange(e: string) {
+    React.useEffect(() => {
         setLoading(true)
-        setSim(Number.parseInt(e, 10))
-
         const maxTime = data[sim].reduce((max, item) => item.query_duration > max ? item.query_duration : max, 0)
         setHistoData(Array.from({ length: Math.ceil(maxTime) }, (_, i) => {
             const count = data[sim].filter(item => Math.ceil(item.query_duration) === i).length
@@ -68,12 +66,12 @@ export default function SingleRun({ data }: { data: Simulation[][] }) {
             return { simTime: i, activeQueriesCount: count }
         }))
         setLoading(false)
-    }
+    }, [sim, data])
 
     return (
         <div className="flex flex-col w-full h-full max-h-full gap-6 items-center overflow-hidden">
             <div className="flex justify-start items-start w-full">
-                <Select defaultValue="0" onValueChange={(e) => handleSelectChange(e)}>
+                <Select defaultValue="0" onValueChange={(e) => setSim(Number.parseInt(e, 10))}>
                     <SelectTrigger className="w-[180px]">
                         <SelectValue placeholder="Select a simulation" />
                     </SelectTrigger>
