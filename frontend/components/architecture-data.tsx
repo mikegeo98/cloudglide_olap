@@ -32,9 +32,19 @@ import { ArchitectureType, instanceTypes } from "@/lib/config";
 import { ChevronsUpDown, Plus } from "lucide-react";
 
 export default function ArchitectureData() {
-    const { data, stage, setStage } = React.useContext(InputContext)
+    const { data, stage, setStage, setData } = React.useContext(InputContext)
     const [arch, setArch] = React.useState<string>()
     const [add, setAdd] = React.useState(false)
+
+    function duplicateArchitecture(scenario: object) {
+        setData({
+            ...data,
+            scenarios: [
+                ...data.scenarios,
+                JSON.parse(JSON.stringify(scenario)), // copy by value instead of reference
+            ]
+        })
+    }
 
     return (
         <div className="flex flex-col items-center gap-8 w-[800px] px-6 max-h-full overflow-y-auto">
@@ -59,22 +69,27 @@ export default function ArchitectureData() {
                 }
 
                 return (
-                    <Collapsible key={index} className="w-full space-y-6">
-                        <CollapsibleTrigger asChild>
-                            <div className="flex items-center justify-between gap-3 mb-0 rounded-md">
-                                <h4 className="text-sm font-semibold">
-                                    {`Scenario ${index + 1}: ${scenario.architecture}`}
-                                </h4>
-                                <Button variant="ghost" size="icon" className="size-8">
-                                    <ChevronsUpDown />
-                                    <span className="sr-only">Toggle</span>
-                                </Button>
-                            </div>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="mt-3 space-y-3">
-                            {form}
-                        </CollapsibleContent>
-                    </Collapsible>
+                    <div key={index} className="flex w-full gap-3">
+                        <Collapsible className="w-full space-y-6">
+                            <CollapsibleTrigger asChild>
+                                <div className="flex items-center justify-between gap-3 mb-0 rounded-md">
+                                    <h4 className="text-sm font-semibold">
+                                        {`Scenario ${index + 1}: ${scenario.architecture}`}
+                                    </h4>
+                                    <Button variant="ghost" size="icon" className="size-8">
+                                        <ChevronsUpDown />
+                                        <span className="sr-only">Toggle</span>
+                                    </Button>
+                                </div>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="mt-3 space-y-3">
+                                {form}
+                            </CollapsibleContent>
+                        </Collapsible>
+                        <Button variant="default" onClick={() => duplicateArchitecture(scenario)}>
+                            Duplicate
+                        </Button>
+                    </div>
                 )
             })}
             {data.scenarios.length > 0 ? (
