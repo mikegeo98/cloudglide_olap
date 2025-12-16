@@ -18,39 +18,41 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import {
+    ChartConfig,
     ChartContainer,
+    ChartLegend,
+    ChartLegendContent,
     ChartTooltip,
     ChartTooltipContent,
-    type ChartConfig,
 } from "@/components/ui/chart";
-import { columns, Simulation } from "./columns-sim";
-import { DataTable } from "./data-table";
+import { Button } from "@/components/ui/button";
 import { InputContext } from "@/components/provider";
 
+import { columns, Simulation } from "./columns-sim";
+import { DataTable } from "./data-table";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, LabelList, XAxis } from "recharts";
 import React from "react";
 
-const chartData = [
-    { month: "January", desktop: 186 },
-    { month: "February", desktop: 305 },
-    { month: "March", desktop: 237 },
-    { month: "April", desktop: 73 },
-    { month: "May", desktop: 209 },
-    { month: "June", desktop: 214 },
-]
-
-const chartConfig = {
-    desktop: {
-        label: "Desktop",
-        color: "var(--chart-1)",
+const simChartConfig = {
+    io: {
+        label: "I/O Phase",
+        color: "var(--chart-3)",
+    },
+    cpu: {
+        label: "CPU Phase",
+        color: "var(--chart-4)",
+    },
+    shuffle: {
+        label: "Shuffle Phase",
+        color: "var(--chart-5)",
     },
 } satisfies ChartConfig
 
 export default function SingleRun({ data, filenames }: { data: Simulation[][], filenames: string[] }) {
-    const { data: input } = React.useContext(InputContext)
     const [sim, setSim] = React.useState<number>(0)
     const [buckets, setBuckets] = React.useState<number>(10)
     const [rowSelection, setRowSelection] = React.useState<Record<number, boolean>>({})
+    const [simData, setSimData] = React.useState<{ simTime: number, io: number, cpu: number, shuffle: number }[]>([])
     const [timelineData, setTimelineData] = React.useState<{ simTime: number, arrivalsCount: number }[]>([])
     const [histoData, setHistoData] = React.useState<{ sec: number, finishedCount: number }[]>([])
     const [summaryTable, setSummaryTable] = React.useState<{
@@ -67,10 +69,9 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
         percQuery: number,
         totalPrice: number,
     }>()
-    const [loading, setLoading] = React.useState(false)
+    const [showSimCard, setShowSimCard] = React.useState(false)
 
     React.useEffect(() => {
-        setLoading(true)
         const maxTime = data[sim].reduce((max, item) => item.query_duration > max ? item.query_duration : max, 0)
         setHistoData(Array.from({ length: Math.ceil(maxTime) + 1 }, (_, i) => {
             const count = data[sim].filter(item => Math.ceil(item.query_duration) === i).length
@@ -87,7 +88,15 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
         }
         setTimelineData(timelineArray)
 
-        // TODO: change in-place sorting to be not in-place
+        setSimData(data[sim].map(s => {
+            return {
+                simTime: s.start_timestamp,
+                io: s.io,
+                cpu: s.cpu,
+                shuffle: s.shuffle,
+            }
+        }))
+
         setSummaryTable({
             queueDelayAvg: parseFloat((data[sim].reduce((prev, curr) => prev + curr.queueing_delay, 0) / data[sim].length).toFixed(4)),
             bufferDelayAvg: parseFloat((data[sim].reduce((prev, curr) => prev + curr.buffer_delay, 0) / data[sim].length).toFixed(4)),
@@ -96,18 +105,17 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
             meanShuffle: parseFloat((data[sim].reduce((prev, curr) => prev + curr.shuffle, 0) / data[sim].length).toFixed(4)),
             meanQueryLatency: parseFloat((data[sim].reduce((prev, curr) => prev + curr.query_duration, 0) / data[sim].length).toFixed(4)),
             meanQuery: parseFloat((data[sim].reduce((prev, curr) => prev + curr.query_duration_with_queue, 0) / data[sim].length).toFixed(4)),
-            medianQueryLatency: parseFloat(data[sim].toSorted((a,b) => b.query_duration - a.query_duration)[Math.floor(data[sim].length / 2)].query_duration.toFixed(4)),
-            medianQuery: parseFloat(data[sim].toSorted((a,b) => b.query_duration_with_queue - a.query_duration_with_queue)[Math.floor(data[sim].length / 2)].query_duration_with_queue.toFixed(4)),
-            percQueryLatency: parseFloat(data[sim].toSorted((a,b) => b.query_duration - a.query_duration)[Math.floor(data[sim].length * 0.05)].query_duration.toFixed(4)),
-            percQuery: parseFloat(data[sim].toSorted((a,b) => b.query_duration_with_queue - a.query_duration_with_queue)[Math.floor(data[sim].length * 0.05)].query_duration_with_queue.toFixed(4)),
+            medianQueryLatency: parseFloat(data[sim].toSorted((a, b) => b.query_duration - a.query_duration)[Math.floor(data[sim].length / 2)].query_duration.toFixed(4)),
+            medianQuery: parseFloat(data[sim].toSorted((a, b) => b.query_duration_with_queue - a.query_duration_with_queue)[Math.floor(data[sim].length / 2)].query_duration_with_queue.toFixed(4)),
+            percQueryLatency: parseFloat(data[sim].toSorted((a, b) => b.query_duration - a.query_duration)[Math.floor(data[sim].length * 0.05)].query_duration.toFixed(4)),
+            percQuery: parseFloat(data[sim].toSorted((a, b) => b.query_duration_with_queue - a.query_duration_with_queue)[Math.floor(data[sim].length * 0.05)].query_duration_with_queue.toFixed(4)),
             totalPrice: parseFloat((data[sim].reduce((prev, curr) => prev + curr.mon_cost, 0)).toFixed(4)),
         })
-        setLoading(false)
     }, [sim, data, buckets])
 
     return (
         <div className="flex flex-col w-full h-full max-h-full gap-4 items-center overflow-hidden">
-            <div className="flex justify-start items-start w-full">
+            <div className="flex justify-between items-center gap-4 w-full">
                 <Select defaultValue={filenames[0]} onValueChange={(e) => setSim(filenames.indexOf(e))}>
                     <SelectTrigger className="w-[180px]">
                         <SelectValue placeholder="Select a simulation" />
@@ -121,7 +129,78 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
                         </SelectGroup>
                     </SelectContent>
                 </Select>
+                <Button variant="default" onClick={() => setShowSimCard(!showSimCard)}>
+                    {showSimCard ? "Hide Simulation" : "Show Simulation"}
+                </Button>
             </div>
+            {
+                showSimCard ? (
+                    <Card className="w-full">
+                        <CardHeader>
+                            <CardTitle>Simulation</CardTitle>
+                            <CardAction>
+                                <Button variant="default" onClick={() => {
+                                    setShowSimCard(false)
+                                    setTimeout(() => { // little hack to restart the animation
+                                        setShowSimCard(true)
+                                    }, 1)
+                                }}>
+                                    Rerun
+                                </Button>
+                            </CardAction>
+                        </CardHeader>
+                        <CardContent>
+                            <ChartContainer config={simChartConfig} className="h-[300px] w-full">
+                                <LineChart
+                                    accessibilityLayer
+                                    data={simData}
+                                    margin={{
+                                        left: 12,
+                                        right: 12,
+                                    }}
+                                >
+                                    <CartesianGrid strokeDasharray="10 10" />
+                                    <XAxis
+                                        dataKey="simTime"
+                                        tickLine={true}
+                                        axisLine={false}
+                                        tickMargin={8}
+                                    />
+                                    <ChartTooltip content={<ChartTooltipContent className="w-[175px]" labelFormatter={() => "Phases"} />} />
+                                    <Line
+                                        dataKey="cpu"
+                                        type="monotone"
+                                        stroke="var(--chart-4)"
+                                        strokeWidth={2}
+                                        animationDuration={8000}
+                                        animationBegin={200}
+                                        dot={false}
+                                    />
+                                    <Line
+                                        dataKey="io"
+                                        type="monotone"
+                                        stroke="var(--chart-3)"
+                                        strokeWidth={2}
+                                        animationDuration={8000}
+                                        animationBegin={0}
+                                        dot={false}
+                                    />
+                                    <Line
+                                        dataKey="shuffle"
+                                        type="monotone"
+                                        stroke="var(--chart-5)"
+                                        strokeWidth={2}
+                                        animationDuration={8000}
+                                        animationBegin={400}
+                                        dot={false}
+                                    />
+                                    <ChartLegend content={<ChartLegendContent />} />
+                                </LineChart>
+                            </ChartContainer>
+                        </CardContent>
+                    </Card>
+                ) : null
+            }
             <div className="grid grid-cols-2 gap-4">
                 <DataTable className="w-full max-h-[300px] overflow-auto" columns={columns} data={data[sim]} rowSelection={rowSelection} setRowSelection={setRowSelection} />
                 <Card className="w-full">
@@ -174,7 +253,7 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
                         </CardAction>
                     </CardHeader>
                     <CardContent>
-                        <ChartContainer config={chartConfig}>
+                        <ChartContainer config={{}}>
                             <LineChart
                                 accessibilityLayer
                                 data={timelineData}
@@ -228,7 +307,7 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <ChartContainer config={chartConfig}>
+                        <ChartContainer config={{}}>
                             <BarChart
                                 accessibilityLayer
                                 data={histoData}
@@ -261,6 +340,6 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
                     </CardContent>
                 </Card>
             </div>
-        </div>
+        </div >
     )
 }
