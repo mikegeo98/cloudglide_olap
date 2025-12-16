@@ -11,15 +11,17 @@ import Visualization from "./visualization";
 export default function Selection({ data }: { data: { data: Simulation[][], files: string[] } }) {
     const [visualize, setVisualize] = React.useState(false)
     const [visualizedData, setVisualizedData] = React.useState(data.data)
+    const [filenameData, setFilenameData] = React.useState(data.files)
     const [rowSelection, setRowSelection] = React.useState<Record<number, boolean>>({})
 
     function handleVisualize() {
         setVisualizedData(data.data.filter((_, index) => rowSelection[index]))
+        setFilenameData(data.files.filter((_, index) => rowSelection[index]))
         setVisualize(true)
     }
 
     if (visualize) {
-        return <Visualization data={visualizedData} />
+        return <Visualization data={visualizedData} filenames={filenameData} />
     } else {
         return (
             <div className="flex flex-col gap-6 items-center">
