@@ -25,11 +25,19 @@ import {
     ChartTooltip,
     ChartTooltipContent,
 } from "@/components/ui/chart";
+import {
+    InputGroup,
+    InputGroupAddon,
+    InputGroupButton,
+    InputGroupInput,
+    InputGroupText,
+    InputGroupTextarea,
+} from "@/components/ui/input-group";
 import { Button } from "@/components/ui/button";
 
 import { columns, Simulation } from "./columns-sim";
 import { DataTable } from "./data-table";
-import { Bar, BarChart, CartesianGrid, Line, LineChart, LabelList, XAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Line, LineChart, LabelList, XAxis, Label, YAxis } from "recharts";
 import React from "react";
 
 const simChartConfig = {
@@ -47,12 +55,23 @@ const simChartConfig = {
     },
 } satisfies ChartConfig
 
+const timelineChartConfig = {
+    arrivalsCount: {
+        label: "Arrivals per Bucket",
+        color: "var(--chart-3)",
+    },
+    activesCount: {
+        label: "Active Queries per Bucket",
+        color: "var(--chart-4)",
+    },
+} satisfies ChartConfig
+
 export default function SingleRun({ data, filenames }: { data: Simulation[][], filenames: string[] }) {
     const [sim, setSim] = React.useState<number>(0)
     const [buckets, setBuckets] = React.useState<number>(10)
     const [rowSelection, setRowSelection] = React.useState<Record<number, boolean>>({})
     const [simData, setSimData] = React.useState<{ simTime: number, io: number, cpu: number, shuffle: number }[]>([])
-    const [timelineData, setTimelineData] = React.useState<{ simTime: number, arrivalsCount: number }[]>([])
+    const [timelineData, setTimelineData] = React.useState<{ simTime: number, arrivalsCount: number, activesCount: number }[]>([])
     const [histoData, setHistoData] = React.useState<{ sec: number, finishedCount: number }[]>([])
     const [summaryTable, setSummaryTable] = React.useState<{
         queueDelayAvg: number,
@@ -81,9 +100,10 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
         let lastBucket = 0
         const timelineArray = []
         for (let i = 0; i <= lastTimestamp; i += lastTimestamp / buckets) {
-            const count = data[sim].filter(item => item.start_timestamp <= i && item.start_timestamp > lastBucket).length
+            const arrivalsCount = data[sim].filter(item => item.start_timestamp <= i && item.start_timestamp > lastBucket).length
+            const sillActiveFromPrev = data[sim].filter(item => item.start_timestamp <= lastBucket && item.end_timestamp >= i).length
             lastBucket = i
-            timelineArray.push({ simTime: Math.ceil(i), arrivalsCount: count })
+            timelineArray.push({ simTime: Math.ceil(i), arrivalsCount: arrivalsCount, activesCount: arrivalsCount + sillActiveFromPrev })
         }
         setTimelineData(timelineArray)
 
@@ -137,6 +157,9 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
                     <Card className="w-full">
                         <CardHeader>
                             <CardTitle>Simulation</CardTitle>
+                            <CardDescription>
+                                Simulating the process of query execution over time, showing the resource usage phases (I/O, CPU, Shuffle) as they occur.
+                            </CardDescription>
                             <CardAction>
                                 <Button variant="default" onClick={() => {
                                     setShowSimCard(false)
@@ -154,7 +177,6 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
                                     accessibilityLayer
                                     data={simData}
                                     margin={{
-                                        left: 12,
                                         right: 12,
                                     }}
                                 >
@@ -163,7 +185,12 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
                                         dataKey="simTime"
                                         tickLine={true}
                                         axisLine={false}
-                                        tickMargin={8}
+                                        tickFormatter={(value: number) => (value / 1000).toFixed(1)}
+                                        label={<Label position="middle" dy={15}>Time (sec)</Label>}
+                                    />
+                                    <YAxis
+                                        tickLine={false}
+                                        axisLine={false}
                                     />
                                     <ChartTooltip content={<ChartTooltipContent className="w-[175px]" labelFormatter={() => "Phases"} />} />
                                     <Line
@@ -234,40 +261,51 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
                         <CardTitle>Timeline or Activity Chart</CardTitle>
                         <CardDescription>
                             x-axis: simulation time<br />
-                            y-axis: number of arrivals per minute
+                            y-axis: number of active queries and arrivals
                         </CardDescription>
                         <CardAction className="flex items-center gap-3">
-                            Buckets:
-                            <Select defaultValue={"10"} onValueChange={(e) => setBuckets(Number.parseInt(e))}>
-                                <SelectTrigger className="w-fit">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={"10"}>10</SelectItem>
-                                    <SelectItem value={"20"}>20</SelectItem>
-                                    <SelectItem value={"50"}>50</SelectItem>
-                                    <SelectItem value={"100"}>100</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <InputGroup>
+                                <Select defaultValue={"10"} onValueChange={(e) => setBuckets(Number.parseInt(e))}>
+                                    <SelectTrigger className="w-fit border-none">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="border-none">
+                                        <SelectItem value={"5"}>5</SelectItem>
+                                        <SelectItem value={"10"}>10</SelectItem>
+                                        <SelectItem value={"20"}>20</SelectItem>
+                                        <SelectItem value={"50"}>50</SelectItem>
+                                        <SelectItem value={"100"}>100</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <InputGroupAddon align="inline-end">
+                                    <InputGroupText>Buckets</InputGroupText>
+                                </InputGroupAddon>
+                            </InputGroup>
                         </CardAction>
                     </CardHeader>
                     <CardContent>
-                        <ChartContainer config={{}}>
+                        <ChartContainer config={timelineChartConfig}>
                             <LineChart
                                 accessibilityLayer
                                 data={timelineData}
                                 margin={{
                                     top: 30,
-                                    left: 12,
                                     right: 12,
+                                    bottom: 10,
                                 }}
                             >
                                 <CartesianGrid vertical={false} />
                                 <XAxis
                                     dataKey="simTime"
-                                    tickLine={false}
+                                    tickLine={true}
                                     axisLine={false}
-                                    tickMargin={8}
+                                    tickFormatter={(value: number) => (value / 1000).toFixed(1)}
+                                    label={<Label position="middle" dy={15}>Time (sec)</Label>}
+                                />
+                                <YAxis
+                                    axisLine={false}
+                                    tickLine={false}
+                                    label={<Label position="middle" angle={270}>Arrived and active queries</Label>}
                                 />
                                 <Line
                                     dataKey="arrivalsCount"
@@ -293,6 +331,31 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
                                         }}
                                     />
                                 </Line>
+                                <Line
+                                    dataKey="activesCount"
+                                    type="linear"
+                                    stroke="var(--chart-4)"
+                                    strokeWidth={2}
+                                    dot={{
+                                        fill: "var(--chart-4)",
+                                    }}
+                                    activeDot={{
+                                        r: 6,
+                                    }}
+                                >
+                                    <LabelList
+                                        position="top"
+                                        offset={12}
+                                        className="fill-foreground"
+                                        fontSize={12}
+                                        formatter={(value: number) => {
+                                            if (value !== 0) {
+                                                return value
+                                            }
+                                        }}
+                                    />
+                                </Line>
+                                <ChartLegend content={<ChartLegendContent />} />
                             </LineChart>
                         </ChartContainer>
                     </CardContent>
@@ -301,7 +364,7 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
                     <CardHeader>
                         <CardTitle>Histogram of per-query latencies</CardTitle>
                         <CardDescription>
-                            x-axis: query duration in seconds<br />
+                            x-axis: query duration<br />
                             y-axis: number of queries finished under the given duration
                         </CardDescription>
                     </CardHeader>
@@ -312,14 +375,20 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
                                 data={histoData}
                                 margin={{
                                     top: 30,
+                                    bottom: 10,
                                 }}
                             >
                                 <CartesianGrid vertical={false} />
                                 <XAxis
                                     dataKey="sec"
                                     tickLine={false}
-                                    tickMargin={10}
                                     axisLine={false}
+                                    label={<Label position="middle" dy={15}>Query Duration (sec)</Label>}
+                                />
+                                <YAxis
+                                    axisLine={false}
+                                    tickLine={false}
+                                    label={<Label position="middle" angle={270}>Number of finished queries</Label>}
                                 />
                                 <Bar dataKey="finishedCount" fill="var(--chart-3)" radius={8}>
                                     <LabelList
