@@ -26,7 +26,6 @@ import {
     ChartTooltipContent,
 } from "@/components/ui/chart";
 import { Button } from "@/components/ui/button";
-import { InputContext } from "@/components/provider";
 
 import { columns, Simulation } from "./columns-sim";
 import { DataTable } from "./data-table";

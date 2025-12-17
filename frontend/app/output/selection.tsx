@@ -49,7 +49,7 @@ export default function Selection({ data }: { data: { data: Simulation[][], file
     } else {
         return (
             <div className="max-w-full flex flex-col gap-6 items-center overflow-hidden">
-                {tableData ? <DataTable className="w-fit max-w-full overflow-hidden" columns={columns} data={tableData} rowSelection={rowSelection} setRowSelection={setRowSelection} /> : null}
+                {tableData ? <DataTable className="min-w-[180px] w-fit max-w-full overflow-hidden" columns={columns} data={tableData} rowSelection={rowSelection} setRowSelection={setRowSelection} /> : null}
                 <Button disabled={Object.keys(rowSelection).length === 0} variant="outline" className="bg-foreground text-background w-[180px]" onClick={handleVisualize}>
                     Visualize
                 </Button>

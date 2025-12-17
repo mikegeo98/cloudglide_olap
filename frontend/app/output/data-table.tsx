@@ -65,6 +65,19 @@ export function DataTable<TData, TValue>({
     },
   })
 
+  React.useEffect(() => {
+    const hiddenColumns: Record<string, boolean> = {}
+    columns.forEach(c => {
+      if (c.id !== undefined) {
+        hiddenColumns[c.id] = data.find(row => {
+          const ind = Object.keys(row as object).findIndex(col => col === c.id)
+          return Object.values(row as object)[ind] !== undefined
+        }) !== undefined
+      }
+    })
+    setColumnVisibility({ ...hiddenColumns, select: true })
+  }, [])
+
   return (
     <div className={cn(className, "rounded-md border")}>
       <Table>
