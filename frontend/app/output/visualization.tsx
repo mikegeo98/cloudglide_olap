@@ -22,7 +22,7 @@ export default function Visualization({ data, filenames }: { data: Simulation[][
                     <SingleRun data={data} filenames={filenames} />
                 </TabsContent>
                 <TabsContent value="multiple">
-                    <MultipleRuns data={data} />
+                    <MultipleRuns data={data} filenames={filenames} />
                 </TabsContent>
             </Tabs>
         </div>

@@ -28,10 +28,7 @@ import {
 import {
     InputGroup,
     InputGroupAddon,
-    InputGroupButton,
-    InputGroupInput,
     InputGroupText,
-    InputGroupTextarea,
 } from "@/components/ui/input-group";
 import { Button } from "@/components/ui/button";
 
@@ -318,6 +315,7 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
                                     activeDot={{
                                         r: 6,
                                     }}
+                                    isAnimationActive={false}
                                 >
                                     <LabelList
                                         position="top"
@@ -342,6 +340,7 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
                                     activeDot={{
                                         r: 6,
                                     }}
+                                    isAnimationActive={false}
                                 >
                                     <LabelList
                                         position="top"
@@ -390,7 +389,7 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
                                     tickLine={false}
                                     label={<Label position="middle" angle={270}>Number of finished queries</Label>}
                                 />
-                                <Bar dataKey="finishedCount" fill="var(--chart-3)" radius={8}>
+                                <Bar dataKey="finishedCount" fill="var(--chart-3)" radius={8} isAnimationActive={false}>
                                     <LabelList
                                         position="top"
                                         offset={12}
