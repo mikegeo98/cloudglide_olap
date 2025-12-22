@@ -30,12 +30,23 @@ import {
     InputGroupAddon,
     InputGroupText,
 } from "@/components/ui/input-group";
+import {
+    Table,
+    TableBody,
+    TableCaption,
+    TableCell,
+    TableFooter,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 
 import { columns, Simulation } from "./columns-sim";
 import { DataTable } from "./data-table";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, LabelList, XAxis, Label, YAxis } from "recharts";
 import React from "react";
+import { ChartColumn, ChartSpline } from "lucide-react";
 
 const simChartConfig = {
     io: {
@@ -69,7 +80,8 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
     const [rowSelection, setRowSelection] = React.useState<Record<number, boolean>>({})
     const [simData, setSimData] = React.useState<{ simTime: number, io: number, cpu: number, shuffle: number }[]>([])
     const [timelineData, setTimelineData] = React.useState<{ simTime: number, arrivalsCount: number, activesCount: number }[]>([])
-    const [histoData, setHistoData] = React.useState<{ sec: number, finishedCount: number }[]>([])
+    const [histoData, setHistoData] = React.useState<{ sec: number, finishedCount: number, accFinishedCount: number }[]>([])
+    const [isCDF, setCDF] = React.useState<boolean>(false)
     const [summaryTable, setSummaryTable] = React.useState<{
         queueDelayAvg: number,
         bufferDelayAvg: number,
@@ -90,7 +102,8 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
         const maxTime = data[sim].reduce((max, item) => item.query_duration > max ? item.query_duration : max, 0)
         setHistoData(Array.from({ length: Math.ceil(maxTime) + 1 }, (_, i) => {
             const count = data[sim].filter(item => Math.ceil(item.query_duration) === i).length
-            return { sec: i, finishedCount: count }
+            const acc = data[sim].filter(item => Math.ceil(item.query_duration) < i).length
+            return { sec: i, finishedCount: count, accFinishedCount: acc }
         }))
 
         const lastTimestamp = data[sim][data[sim].length - 1].start_timestamp
@@ -226,29 +239,69 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
             }
             <div className="grid grid-cols-2 gap-4">
                 <DataTable className="w-full max-h-[300px] overflow-auto" columns={columns} data={data[sim]} rowSelection={rowSelection} setRowSelection={setRowSelection} />
-                <Card className="w-full">
+                <Card className="w-full max-h-[300px] overflow-auto">
                     <CardHeader>
                         <CardTitle>Summary Table</CardTitle>
                     </CardHeader>
-                    <CardContent className="text-sm">
-                        <div className="grid grid-cols-2">
-                            <p><span className="text-muted-foreground">Queue Delay Avg:</span> {summaryTable?.queueDelayAvg}</p>
-                            <p><span className="text-muted-foreground">Buffer Delay Avg:</span> {summaryTable?.bufferDelayAvg}</p>
-                        </div>
-                        <div className="grid grid-cols-3">
-                            <p><span className="text-muted-foreground">Mean I/O:</span> {summaryTable?.meanIO}</p>
-                            <p><span className="text-muted-foreground">Mean CPU:</span> {summaryTable?.meanCPU}</p>
-                            <p><span className="text-muted-foreground">Mean Shuffle:</span> {summaryTable?.meanShuffle}</p>
-                        </div>
-                        <div className="grid grid-cols-2">
-                            <p><span className="text-muted-foreground">Mean Query Latency:</span> {summaryTable?.meanQueryLatency}</p>
-                            <p><span className="text-muted-foreground">Mean Query (with queueing):</span> {summaryTable?.meanQuery}</p>
-                            <p><span className="text-muted-foreground">Median Query Latency:</span> {summaryTable?.medianQueryLatency}</p>
-                            <p><span className="text-muted-foreground">Median Query (with queueing):</span> {summaryTable?.medianQuery}</p>
-                            <p><span className="text-muted-foreground">95th Percentile Query Latency:</span> {summaryTable?.percQueryLatency}</p>
-                            <p><span className="text-muted-foreground">95th Percentile Query (with queueing):</span> {summaryTable?.percQuery}</p>
-                            <p><span className="text-muted-foreground">Total Price:</span> ${summaryTable?.totalPrice}</p>
-                        </div>
+                    <CardContent>
+                        <Table className="border">
+                            <TableHeader>
+                                <TableRow className="bg-secondary">
+                                    <TableHead className="w-[100px]">Metric</TableHead>
+                                    <TableHead className="text-right">Value</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                <TableRow>
+                                    <TableCell className="font-medium">Queue Delay Avg</TableCell>
+                                    <TableCell className="text-right">{summaryTable?.bufferDelayAvg}</TableCell>
+                                </TableRow>
+                                <TableRow>
+                                    <TableCell className="font-medium">Buffer Delay Avg</TableCell>
+                                    <TableCell className="text-right">{summaryTable?.queueDelayAvg}</TableCell>
+                                </TableRow>
+                                <TableRow>
+                                    <TableCell className="font-medium">Mean I/O</TableCell>
+                                    <TableCell className="text-right">{summaryTable?.meanIO}</TableCell>
+                                </TableRow>
+                                <TableRow>
+                                    <TableCell className="font-medium">Mean CPU</TableCell>
+                                    <TableCell className="text-right">{summaryTable?.meanCPU}</TableCell>
+                                </TableRow>
+                                <TableRow>
+                                    <TableCell className="font-medium">Mean Shuffle</TableCell>
+                                    <TableCell className="text-right">{summaryTable?.meanShuffle}</TableCell>
+                                </TableRow>
+                                <TableRow>
+                                    <TableCell className="font-medium">Mean Query Latency</TableCell>
+                                    <TableCell className="text-right">{summaryTable?.meanQueryLatency}</TableCell>
+                                </TableRow>
+                                <TableRow>
+                                    <TableCell className="font-medium">Mean Query (with queueing)</TableCell>
+                                    <TableCell className="text-right">{summaryTable?.meanQuery}</TableCell>
+                                </TableRow>
+                                <TableRow>
+                                    <TableCell className="font-medium">Median Query Latency</TableCell>
+                                    <TableCell className="text-right">{summaryTable?.medianQueryLatency}</TableCell>
+                                </TableRow>
+                                <TableRow>
+                                    <TableCell className="font-medium">Median Query (with queueing)</TableCell>
+                                    <TableCell className="text-right">{summaryTable?.medianQuery}</TableCell>
+                                </TableRow>
+                                <TableRow>
+                                    <TableCell className="font-medium">95th Percentile Query Latency</TableCell>
+                                    <TableCell className="text-right">{summaryTable?.percQueryLatency}</TableCell>
+                                </TableRow>
+                                <TableRow>
+                                    <TableCell className="font-medium">95th Percentile Query (with queueing)</TableCell>
+                                    <TableCell className="text-right">{summaryTable?.percQuery}</TableCell>
+                                </TableRow>
+                                <TableRow>
+                                    <TableCell className="font-medium">Total Price</TableCell>
+                                    <TableCell className="text-right">${summaryTable?.totalPrice}</TableCell>
+                                </TableRow>
+                            </TableBody>
+                        </Table>
                     </CardContent>
                 </Card>
             </div>
@@ -296,8 +349,8 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
                                     dataKey="simTime"
                                     tickLine={true}
                                     axisLine={false}
-                                    tickFormatter={(value: number) => (value / 1000).toFixed(1)}
-                                    label={<Label position="middle" dy={15}>Time (sec)</Label>}
+                                    tickFormatter={(value: number) => (value / 1000 / 60).toFixed(1)}
+                                    label={<Label position="middle" dy={15}>Time (min)</Label>}
                                 />
                                 <YAxis
                                     axisLine={false}
@@ -361,48 +414,88 @@ export default function SingleRun({ data, filenames }: { data: Simulation[][], f
                 </Card>
                 <Card className="w-full">
                     <CardHeader>
-                        <CardTitle>Histogram of per-query latencies</CardTitle>
+                        <CardTitle>{isCDF ? "CDF" : "Histogram"} of per-query latencies</CardTitle>
                         <CardDescription>
                             x-axis: query duration<br />
                             y-axis: number of queries finished under the given duration
                         </CardDescription>
+                        <CardAction>
+                            <Button variant="outline" onClick={() => setCDF(!isCDF)}>
+                                {isCDF ? <ChartColumn /> : <ChartSpline />}
+                            </Button>
+                        </CardAction>
                     </CardHeader>
                     <CardContent>
                         <ChartContainer config={{}}>
-                            <BarChart
-                                accessibilityLayer
-                                data={histoData}
-                                margin={{
-                                    top: 30,
-                                    bottom: 10,
-                                }}
-                            >
-                                <CartesianGrid vertical={false} />
-                                <XAxis
-                                    dataKey="sec"
-                                    tickLine={false}
-                                    axisLine={false}
-                                    label={<Label position="middle" dy={15}>Query Duration (sec)</Label>}
-                                />
-                                <YAxis
-                                    axisLine={false}
-                                    tickLine={false}
-                                    label={<Label position="middle" angle={270}>Number of finished queries</Label>}
-                                />
-                                <Bar dataKey="finishedCount" fill="var(--chart-3)" radius={8} isAnimationActive={false}>
-                                    <LabelList
-                                        position="top"
-                                        offset={12}
-                                        className="fill-foreground"
-                                        fontSize={12}
-                                        formatter={(value: number) => {
-                                            if (value !== 0) {
-                                                return value
-                                            }
-                                        }}
+                            {isCDF ? (
+                                <LineChart
+                                    accessibilityLayer
+                                    data={histoData}
+                                    margin={{
+                                        top: 30,
+                                        bottom: 10,
+                                    }}
+                                >
+                                    <CartesianGrid vertical={false} />
+                                    <XAxis
+                                        dataKey="sec"
+                                        tickLine={false}
+                                        axisLine={false}
+                                        label={<Label position="middle" dy={15}>Query Duration (sec)</Label>}
                                     />
-                                </Bar>
-                            </BarChart>
+                                    <YAxis
+                                        axisLine={false}
+                                        tickLine={false}
+                                        label={<Label position="middle" angle={270}>Number of finished queries</Label>}
+                                    />
+                                    <ChartTooltip
+                                        cursor={false}
+                                        content={<ChartTooltipContent hideLabel />}
+                                    />
+                                    <Line
+                                        dataKey="accFinishedCount"
+                                        type="step"
+                                        stroke="var(--chart-3)"
+                                        strokeWidth={2}
+                                        dot={false}
+                                    />
+                                </LineChart>
+                            ) : (
+                                <BarChart
+                                    accessibilityLayer
+                                    data={histoData}
+                                    margin={{
+                                        top: 30,
+                                        bottom: 10,
+                                    }}
+                                >
+                                    <CartesianGrid vertical={false} />
+                                    <XAxis
+                                        dataKey="sec"
+                                        tickLine={false}
+                                        axisLine={false}
+                                        label={<Label position="middle" dy={15}>Query Duration (sec)</Label>}
+                                    />
+                                    <YAxis
+                                        axisLine={false}
+                                        tickLine={false}
+                                        label={<Label position="middle" angle={270}>Number of finished queries</Label>}
+                                    />
+                                    <Bar dataKey="finishedCount" fill="var(--chart-3)" radius={8} isAnimationActive={false}>
+                                        <LabelList
+                                            position="top"
+                                            offset={12}
+                                            className="fill-foreground"
+                                            fontSize={12}
+                                            formatter={(value: number) => {
+                                                if (value !== 0) {
+                                                    return value
+                                                }
+                                            }}
+                                        />
+                                    </Bar>
+                                </BarChart>
+                            )}
                         </ChartContainer>
                     </CardContent>
                 </Card>
