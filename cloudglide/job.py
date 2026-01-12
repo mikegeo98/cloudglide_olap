@@ -30,6 +30,14 @@ class Job:
     query_exec_time: float = 0.0
     query_exec_time_queueing: float = 0.0
 
+    # Phase-specific timestamps
+    io_start_timestamp: float = 0.0
+    io_end_timestamp: float = 0.0
+    cpu_start_timestamp: float = 0.0
+    cpu_end_timestamp: float = 0.0
+    shuffle_start_timestamp: float = 0.0
+    shuffle_end_timestamp: float = 0.0
+
     # Scheduling metadata
     priority_level: int = 0
     scheduled: bool = field(init=False, default=False)

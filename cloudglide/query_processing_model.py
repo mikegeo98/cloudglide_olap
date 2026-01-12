@@ -146,11 +146,18 @@ def simulate_io(
     # ----------------------------
     if architecture == ArchitectureType.QAAS:
         for job in list(io_jobs):
+            # Set I/O start timestamp on first entry
+            if job.io_start_timestamp == 0.0:
+                job.io_start_timestamp = current_second
+
             elapsed = current_second - max(job.start_timestamp, current_second - second_range)
             cores = assign_cores_to_job_qaas(job, config.qaas_base_time_limit)
             bw = cores * config.qaas_io_per_core_bw  # bytes per second
 
             if job.data_scanned_progress == 0:
+                # Set I/O end timestamp
+                if job.io_end_timestamp == 0.0:
+                    job.io_end_timestamp = current_second
                 # Remove job from I/O queue and move it to the buffer once scanning is done
                 io_jobs.remove(job)
                 if job not in buffer_jobs and job not in cpu_jobs:
@@ -171,6 +178,9 @@ def simulate_io(
                 # account for I/O time until finish
                 job.io_time += finish_delta
                 job.data_scanned_progress = 0
+                # Set I/O end timestamp
+                if job.io_end_timestamp == 0.0:
+                    job.io_end_timestamp = current_second + finish_delta
         return
 
     # ----------------------------
@@ -198,6 +208,10 @@ def simulate_io(
     # ----------------------------
     # Phase 2: Bandwidth Allocation and Processing
     for job, tier in new_jobs:
+        # Set I/O start timestamp on first entry
+        if job.io_start_timestamp == 0.0:
+            job.io_start_timestamp = current_second
+
         # Choose bandwidth source
         scan_bw = {'DRAM': memory_bandwidth, 'SSD': io_bandwidth, 'S3': config.s3_bandwidth}
         bw = scan_bw.get(tier, 0)
@@ -212,9 +226,12 @@ def simulate_io(
             eff_bw = bw
             peers = len([j for j in io_jobs if job_memory_tiers[j.job_id] == tier])
         per_job_bw = eff_bw / peers if peers > 0 else 0
-        
+
         # Progress logic
         if job.data_scanned_progress == 0:
+            # Set I/O end timestamp when I/O completes
+            if job.io_end_timestamp == 0.0:
+                job.io_end_timestamp = current_second
             continue
         elapsed = current_second - max(job.start_timestamp,
                                        current_second - second_range)
@@ -232,6 +249,9 @@ def simulate_io(
         else:
             job.io_time += job.data_scanned_progress / per_job_bw if per_job_bw else 0
             job.data_scanned_progress = 0
+            # Set I/O end timestamp when I/O completes
+            if job.io_end_timestamp == 0.0:
+                job.io_end_timestamp = current_second
             # finalize removal
             if architecture in [ArchitectureType.DWAAS, ArchitectureType.DWAAS_AUTOSCALING] and tier == 'DRAM':
                 idx = job.dram_node_index
@@ -422,9 +442,13 @@ def simulate_cpu(
         else:
             shuffle[job.job_id] = 0
             speedup_factor = 1
-            nodes_involved = 1        
+            nodes_involved = 1
         # Shuffle phase
-        if shuffle[job.job_id] == 1 and job.data_shuffle > 0:            
+        if shuffle[job.job_id] == 1 and job.data_shuffle > 0:
+            # Set shuffle start timestamp on first entry
+            if job.shuffle_start_timestamp == 0.0:
+                job.shuffle_start_timestamp = current_second
+
             if architecture == 2:
                 per_job_bw = config.qaas_shuffle_bw_per_core * cores_assigned
             else:
@@ -441,11 +465,18 @@ def simulate_cpu(
             else:
                 job.shuffle_time += job.data_shuffle / per_job_bw if per_job_bw else 0
                 job.data_shuffle = 0
+                # Set shuffle end timestamp when shuffle completes
+                if job.shuffle_end_timestamp == 0.0:
+                    job.shuffle_end_timestamp = current_second
         if job.data_shuffle == 0 or shuffle[job.job_id] == 0:
+            # Set CPU start timestamp on first entry to CPU phase
+            if job.cpu_start_timestamp == 0.0:
+                job.cpu_start_timestamp = current_second
+
             work = min(cores_assigned, per_node) * speedup_factor * elapsed_time
             denom = (min(cores_assigned, per_node)
                      * (nodes_involved if architecture in [ArchitectureType.DWAAS, ArchitectureType.DWAAS_AUTOSCALING] else 1)
-                     * speedup_factor * 1000)            
+                     * speedup_factor * 1000)
             if job.cpu_time_progress > work:
                 job.cpu_time_progress -= work
                 job.processing_time += elapsed_time / 1000
@@ -458,6 +489,9 @@ def simulate_cpu(
                 time_used = job.cpu_time_progress / denom if denom else 0
                 job.processing_time += time_used
                 job.cpu_time_progress = 0
+                # Set CPU end timestamp when CPU completes
+                if job.cpu_end_timestamp == 0.0:
+                    job.cpu_end_timestamp = current_second
                 to_remove.append(job)
                 job_finalization(
                     job,
@@ -674,6 +708,10 @@ def simulate_cpu_qaas(
 
         # SHUFFLE PHASE
         if shuffle[job.job_id] == 1 and job.data_shuffle > 0:
+            # Set shuffle start timestamp on first entry
+            if job.shuffle_start_timestamp == 0.0:
+                job.shuffle_start_timestamp = current_second
+
             bw = cores * config.qaas_shuffle_bw_per_core
             transferred = bw * elapsed
             if job.data_shuffle > transferred:
@@ -685,11 +723,18 @@ def simulate_cpu_qaas(
             else:
                 job.shuffle_time += job.data_shuffle / bw if bw else 0
                 job.data_shuffle = 0
+                # Set shuffle end timestamp when shuffle completes
+                if job.shuffle_end_timestamp == 0.0:
+                    job.shuffle_end_timestamp = current_second
                 shuffle[job.job_id] = 0
                 shuffle_jobs.remove(job)
 
         # CPU Phase (once shuffle is done)
         if job.data_shuffle == 0 or shuffle[job.job_id] == 0:
+            # Set CPU start timestamp on first entry to CPU phase
+            if job.cpu_start_timestamp == 0.0:
+                job.cpu_start_timestamp = current_second
+
             # how much CPU-seconds we can do this tick
             work = cores * speedup * elapsed
             if job.cpu_time_progress > work:
@@ -698,11 +743,14 @@ def simulate_cpu_qaas(
                 # schedule cpu_done
                 remaining = job.cpu_time_progress
                 rate = min(cores, config.qaas_base_cores) * speedup
-                delta = math.ceil(remaining / (rate or float('inf'))) 
+                delta = math.ceil(remaining / (rate or float('inf')))
                 schedule_event(job, current_second + delta, "cpu_done", events)
             else:
                 job.processing_time += job.cpu_time_progress / (1000 *(min(cores, config.qaas_base_cores) * speedup or 1))
-                job.cpu_time_progress = 0 
+                job.cpu_time_progress = 0
+                # Set CPU end timestamp when CPU completes
+                if job.cpu_end_timestamp == 0.0:
+                    job.cpu_end_timestamp = current_second
                 to_remove.append(job)
     
                 job_finalization(
