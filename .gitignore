@@ -2,3 +2,9 @@ cloudglide/output_simulation/
 __pycache__/
 cloudglide/__pycache__/
 cloudglide/output_visual/
+
+# Media assets — keep out of git, store elsewhere
+*.mp4
+
+# Jupyter autosaves
+.ipynb_checkpoints/

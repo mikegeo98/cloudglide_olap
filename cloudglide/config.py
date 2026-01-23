@@ -333,6 +333,7 @@ def _deep_merge_dicts(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[s
 # 4. Dataset File Mapping
 # ==========================================================
 DATASET_FILES = {
+    -1: "cloudglide/datasets/custom.csv",  # Custom uploaded CSV from frontend
     1: "cloudglide/datasets/cab_10_4.csv",
     3: "cloudglide/datasets/cab_10_20.csv",
     4: "cloudglide/datasets/cab_20_4.csv",

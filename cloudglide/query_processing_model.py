@@ -245,16 +245,16 @@ def simulate_io(
             continue
         elapsed = current_second - max(job.start_timestamp,
                                        current_second - second_range)
-        # work in bytes per second, progress in bytes
-        needed = job.data_scanned_progress * 1000
+        # data_scanned_progress is in MB, per_job_bw is in MB/s, elapsed is in seconds
+        needed = job.data_scanned_progress
         avail = per_job_bw * elapsed
         if needed > avail:
-            job.data_scanned_progress -= avail / 1000
-            job.io_time += elapsed / 1000
+            job.data_scanned_progress -= avail
+            job.io_time += elapsed
             # schedule finish
             rem = job.data_scanned_progress
-            finish_delta_ms = math.ceil(rem / (per_job_bw / 1000 or float('inf')))
-            finish_time = current_second + finish_delta_ms
+            finish_delta = rem / per_job_bw if per_job_bw else float('inf')
+            finish_time = current_second + finish_delta
             schedule_event(job, finish_time, "io_done", events)
         else:
             job.io_time += job.data_scanned_progress / per_job_bw if per_job_bw else 0
@@ -467,17 +467,17 @@ def simulate_cpu(
             if job.shuffle_start_timestamp == 0.0:
                 job.shuffle_start_timestamp = current_second
 
-            if architecture == 2:
+            if architecture == ArchitectureType.ELASTIC_POOL:
                 per_job_bw = config.qaas_shuffle_bw_per_core * cores_assigned
             else:
                 per_job_bw = network_bandwidth / shuffle_count if shuffle_count > 0 else 0
-            # compute shuffle progress
-            total_needed = job.data_shuffle * 1000
+            # data_shuffle is in MB, per_job_bw is in MB/s, elapsed_time is in seconds
+            total_needed = job.data_shuffle
             available = per_job_bw * elapsed_time
             if total_needed > available:
-                job.data_shuffle -= available / 1000
-                job.shuffle_time += elapsed_time / 1000
-                finish_delta = math.ceil(job.data_shuffle / (per_job_bw / 1000 or float('inf')))
+                job.data_shuffle -= available
+                job.shuffle_time += elapsed_time
+                finish_delta = job.data_shuffle / per_job_bw if per_job_bw else float('inf')
                 finish_time = current_second + finish_delta
                 schedule_event(job, finish_time, "shuffle_done", events)
             else:

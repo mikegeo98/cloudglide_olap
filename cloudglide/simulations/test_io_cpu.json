@@ -1,0 +1,81 @@
+{
+  "defaults": {
+    "simulation": {
+      "scale_factor_min": 1,
+      "scale_factor_max": 100,
+      "shuffle_percentage_min": 0.1,
+      "shuffle_percentage_max": 0.35,
+      "interrupt_probability": 0.01,
+      "interrupt_duration": 6000,
+      "logging_interval": 60,
+      "default_max_duration": 108000,
+      "default_estimator": "pm",
+      "pm_p": 4.0,
+      "delta": 0.3,
+      "queue_agg": "sum",
+      "materialization_fraction": 0.25,
+      "parallelizable_portion": 0.9,
+      "s3_bandwidth": 1000
+    },
+    "dwaas": {
+      "cost_per_second_redshift": 0.00030166666,
+      "spot_discount": 0.5,
+      "cold_start_delay": 60.0
+    },
+    "scheduling": {
+      "policy": "fcfs",
+      "max_io_concurrency": 16,
+      "max_cpu_concurrency": 16
+    }
+  },
+  "scenarios": [
+    {
+      "name": "no_cache",
+      "description": "0% hit rate - all data from remote storage",
+      "architecture": "DWAAS",
+      "dataset": 999,
+      "nodes": 4,
+      "instance": 0,
+      "hit_rate": 0.0,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 650,
+      "memory_bandwidth": 40000
+    },
+    {
+      "name": "low_cache",
+      "description": "30% hit rate",
+      "architecture": "DWAAS",
+      "dataset": 999,
+      "nodes": 4,
+      "instance": 0,
+      "hit_rate": 0.3,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 650,
+      "memory_bandwidth": 40000
+    },
+    {
+      "name": "medium_cache",
+      "description": "70% hit rate (typical)",
+      "architecture": "DWAAS",
+      "dataset": 999,
+      "nodes": 4,
+      "instance": 0,
+      "hit_rate": 0.7,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 650,
+      "memory_bandwidth": 40000
+    },
+    {
+      "name": "high_cache",
+      "description": "95% hit rate - almost all data cached",
+      "architecture": "DWAAS",
+      "dataset": 999,
+      "nodes": 4,
+      "instance": 0,
+      "hit_rate": 0.95,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 650,
+      "memory_bandwidth": 40000
+    }
+  ]
+}

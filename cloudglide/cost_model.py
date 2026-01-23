@@ -88,9 +88,18 @@ def faas_cost(
     return total_cost
 
 
-def qaas_total_cost(total_data_scanned_megabytes: float) -> float:
+def qaas_total_cost(total_data_scanned_megabytes: float, cost_per_tb: float = 5.0) -> float:
+    """
+    Calculate QaaS total cost based on data scanned.
 
-    terabytes_scanned = total_data_scanned_megabytes / (1024 * 1024)  # Convert bytes → TB
-    total_cost_usd = terabytes_scanned * 5.0
-    logging.debug(f"QaaS cost: {terabytes_scanned:.3f} TB * $5 = ${total_cost_usd:.2f}")
+    Args:
+        total_data_scanned_megabytes: Total data scanned in MB
+        cost_per_tb: Cost per terabyte scanned (default $5.0)
+
+    Returns:
+        Total cost in USD
+    """
+    terabytes_scanned = total_data_scanned_megabytes / (1024 * 1024)  # Convert MB → TB
+    total_cost_usd = terabytes_scanned * cost_per_tb
+    logging.debug(f"QaaS cost: {terabytes_scanned:.3f} TB * ${cost_per_tb} = ${total_cost_usd:.2f}")
     return total_cost_usd

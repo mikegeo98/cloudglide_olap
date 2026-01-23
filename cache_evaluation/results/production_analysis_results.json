@@ -1,0 +1,131 @@
+{
+  "metadata": {
+    "model": "Production CloudGlide Dynamic Cache Model",
+    "read_update_ratio": 0.7,
+    "warmup_rate": 100.0,
+    "convergence_queries": 1000,
+    "queries_simulated": 2000,
+    "total_configurations": 16,
+    "analysis_version": "v2_production_enhanced_16configs"
+  },
+  "configurations": {
+    "no_cache": {
+      "tier_count": 0,
+      "enabled_tiers": [],
+      "overall_hit_rate": 0.0,
+      "dram_pct": 0.0,
+      "ssd_pct": 0.0,
+      "s3_pct": 100.0,
+      "steady_state_hit_rate": 0.0,
+      "n_updates": 0,
+      "per_tier_rates": {},
+      "extended_metrics": {
+        "avg_bandwidth_gbps": 1.0,
+        "latency_ms": 1000.0,
+        "throughput_qps": 100.0,
+        "efficiency_score": 100.0,
+        "bandwidth_savings_pct": 0.0
+      }
+    },
+    "P": {
+      "tier_count": 1,
+      "enabled_tiers": [
+        "PARQUET_CACHE"
+      ],
+      "overall_hit_rate": 34.65,
+      "dram_pct": 0.0,
+      "ssd_pct": 34.65,
+      "s3_pct": 65.35,
+      "steady_state_hit_rate": 34.31873429286087,
+      "n_updates": 580,
+      "per_tier_rates": {
+        "PARQUET_CACHE": 0.3582566679297555
+      },
+      "extended_metrics": {
+        "avg_bandwidth_gbps": 2.0395,
+        "latency_ms": 490.3162539838196,
+        "throughput_qps": 203.95,
+        "efficiency_score": 203.95,
+        "bandwidth_savings_pct": 103.94999999999999
+      }
+    },
+    "H+P": {
+      "tier_count": 2,
+      "enabled_tiers": [
+        "HEX_CACHE",
+        "PARQUET_CACHE"
+      ],
+      "overall_hit_rate": 62.7,
+      "dram_pct": 0.0,
+      "ssd_pct": 62.7,
+      "s3_pct": 37.3,
+      "steady_state_hit_rate": 61.59350242191983,
+      "n_updates": 602,
+      "per_tier_rates": {
+        "HEX_CACHE": 0.4475969804630142,
+        "PARQUET_CACHE": 0.35829249538789154
+      },
+      "extended_metrics": {
+        "avg_bandwidth_gbps": 2.8810000000000002,
+        "latency_ms": 347.1017007983339,
+        "throughput_qps": 288.1,
+        "efficiency_score": 144.05,
+        "bandwidth_savings_pct": 188.10000000000002
+      }
+    },
+    "V+H+P": {
+      "tier_count": 3,
+      "enabled_tiers": [
+        "VIEW_CACHE",
+        "HEX_CACHE",
+        "PARQUET_CACHE"
+      ],
+      "overall_hit_rate": 74.05000000000001,
+      "dram_pct": 37.65,
+      "ssd_pct": 36.4,
+      "s3_pct": 25.95,
+      "steady_state_hit_rate": 73.82770799016943,
+      "n_updates": 617,
+      "per_tier_rates": {
+        "VIEW_CACHE": 0.3999999991755386,
+        "HEX_CACHE": 0.44799999907660326,
+        "PARQUET_CACHE": 0.35839999926128263
+      },
+      "extended_metrics": {
+        "avg_bandwidth_gbps": 16.7755,
+        "latency_ms": 59.610741855682384,
+        "throughput_qps": 1677.5500000000002,
+        "efficiency_score": 559.1833333333334,
+        "bandwidth_savings_pct": 1577.5500000000002
+      }
+    },
+    "C+V+H+P": {
+      "tier_count": 4,
+      "enabled_tiers": [
+        "MDS_CUBE_CACHE",
+        "VIEW_CACHE",
+        "HEX_CACHE",
+        "PARQUET_CACHE"
+      ],
+      "overall_hit_rate": 86.95,
+      "dram_pct": 66.95,
+      "ssd_pct": 20.0,
+      "s3_pct": 13.05,
+      "steady_state_hit_rate": 86.365609199101,
+      "n_updates": 622,
+      "per_tier_rates": {
+        "MDS_CUBE_CACHE": 0.4999999989694232,
+        "VIEW_CACHE": 0.3999999991755386,
+        "HEX_CACHE": 0.44799999907660326,
+        "PARQUET_CACHE": 0.35839999926128263
+      },
+      "extended_metrics": {
+        "avg_bandwidth_gbps": 27.710500000000003,
+        "latency_ms": 36.08740369174139,
+        "throughput_qps": 2771.05,
+        "efficiency_score": 692.7625,
+        "bandwidth_savings_pct": 2671.05
+      }
+    }
+  }
+}

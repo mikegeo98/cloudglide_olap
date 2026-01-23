@@ -402,7 +402,7 @@ def schedule_jobs(
     elif architecture in [ArchitectureType.QAAS, ArchitectureType.QAAS_CAPACITY]:
         total_price = (
             state["accumulated_slot_hours"] / 3600 * config.cost_per_slot_hour
-            if capacity_pricing else qaas_total_cost(workload_data_scanned_mb)
+            if capacity_pricing else qaas_total_cost(workload_data_scanned_mb, config.qaas_cost_per_tb)
         )
     elif architecture == ArchitectureType.FAAS:
         total_price = faas_cost(

@@ -1,0 +1,163 @@
+{
+	"defaults": {
+		"simulation": {
+			"scale_factor_min": 1,
+			"scale_factor_max": 1000,
+			"shuffle_percentage_min": 0.1,
+			"shuffle_percentage_max": 0.35,
+			"interrupt_probability": 0.01,
+			"interrupt_duration": 6000,
+			"logging_interval": 60,
+			"default_max_duration": 108000,
+			"default_estimator": "pm",
+			"pm_p": 4,
+			"delta": 0.3,
+			"queue_agg": "sum",
+			"materialization_fraction": 0.25,
+			"parallelizable_portion": 0.9,
+			"s3_bandwidth": 1000
+		},
+		"dwaas": {
+			"cost_per_second_redshift": 0.00030166666,
+			"spot_discount": 0.5,
+			"use_spot_instances": false,
+			"cold_start_delay": 60
+		},
+		"elastic_pool": {
+			"cost_per_rpu_hour": 0.375,
+			"cache_warmup_gamma": 0.05,
+			"cold_start_delay": 120
+		},
+		"qaas": {
+			"cost_per_slot_hour": 0.04,
+			"qaas_cost_per_tb": 5,
+			"qaas_io_per_core_bw": 150,
+			"qaas_shuffle_bw_per_core": 50,
+			"qaas_base_cores": 4,
+			"qaas_base_time_limit": 2,
+			"core_alloc_window": 10
+		}
+	},
+	"scenarios": [
+		{
+			"architecture": "DWAAS",
+			"dataset": -1,
+			"nodes": 2,
+			"instance": 0,
+			"hit_rate": 0.7,
+			"cpu_cores": 8,
+			"network_bandwidth": 1000,
+			"io_bandwidth": 650,
+			"memory_bandwidth": 40000,
+			"total_memory_capacity_mb": 65536,
+			"scheduling": {
+				"policy": "sjf",
+				"max_io_concurrency": 4,
+				"max_cpu_concurrency": 4
+			},
+			"name": "dwaas_2n"
+		},
+		{
+			"architecture": "DWAAS",
+			"dataset": -1,
+			"nodes": 4,
+			"instance": 0,
+			"hit_rate": 0.7,
+			"cpu_cores": 16,
+			"network_bandwidth": 1000,
+			"io_bandwidth": 650,
+			"memory_bandwidth": 40000,
+			"total_memory_capacity_mb": 131072,
+			"scheduling": {
+				"policy": "sjf",
+				"max_io_concurrency": 4,
+				"max_cpu_concurrency": 4
+			},
+			"name": "dwaas_4n"
+		},
+		{
+			"architecture": "DWAAS",
+			"dataset": -1,
+			"nodes": 8,
+			"instance": 0,
+			"hit_rate": 0.7,
+			"cpu_cores": 32,
+			"network_bandwidth": 1000,
+			"io_bandwidth": 650,
+			"memory_bandwidth": 40000,
+			"total_memory_capacity_mb": 262144,
+			"scheduling": {
+				"policy": "sjf",
+				"max_io_concurrency": 4,
+				"max_cpu_concurrency": 4
+			},
+			"name": "dwaas_8n"
+		},
+		{
+			"architecture": "ELASTIC_POOL",
+			"dataset": -1,
+			"vpu": 8,
+			"hit_rate": 0.7,
+			"cold_start": 30,
+			"scaling": {
+				"policy": "queue"
+			},
+			"network_bandwidth": 10000,
+			"io_bandwidth": 1200,
+			"memory_bandwidth": 40000,
+			"total_memory_capacity_mb": 96000,
+			"scheduling": {
+				"policy": "sjf",
+				"max_io_concurrency": 16,
+				"max_cpu_concurrency": 16
+			},
+			"name": "ep_8rpu"
+		},
+		{
+			"architecture": "ELASTIC_POOL",
+			"dataset": -1,
+			"vpu": 16,
+			"hit_rate": 0.7,
+			"cold_start": 30,
+			"scaling": {
+				"policy": "queue"
+			},
+			"network_bandwidth": 10000,
+			"io_bandwidth": 1200,
+			"memory_bandwidth": 40000,
+			"total_memory_capacity_mb": 96000,
+			"scheduling": {
+				"policy": "sjf",
+				"max_io_concurrency": 32,
+				"max_cpu_concurrency": 32
+			},
+			"name": "ep_16rpu"
+		},
+		{
+			"architecture": "ELASTIC_POOL",
+			"dataset": -1,
+			"vpu": 32,
+			"hit_rate": 0.7,
+			"cold_start": 30,
+			"scaling": {
+				"policy": "queue"
+			},
+			"network_bandwidth": 10000,
+			"io_bandwidth": 1200,
+			"memory_bandwidth": 40000,
+			"total_memory_capacity_mb": 96000,
+			"scheduling": {
+				"policy": "sjf",
+				"max_io_concurrency": 64,
+				"max_cpu_concurrency": 64
+			},
+			"name": "ep_32rpu"
+		},
+		{
+			"architecture": "QAAS",
+			"dataset": -1,
+			"network_bandwidth": 23,
+			"name": "qaas"
+		}
+	]
+}
