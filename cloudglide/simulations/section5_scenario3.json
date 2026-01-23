@@ -1,0 +1,195 @@
+{
+  "defaults": {
+    "simulation": {
+      "scale_factor_min": 1,
+      "scale_factor_max": 100,
+      "shuffle_percentage_min": 0.1,
+      "shuffle_percentage_max": 0.35,
+      "interrupt_probability": 0.01,
+      "interrupt_duration": 6000,
+      "logging_interval": 60,
+      "default_max_duration": 108000,
+      "default_estimator": "pm",
+      "pm_p": 4.0,
+      "delta": 0.3,
+      "queue_agg": "sum",
+      "materialization_fraction": 0.25,
+      "parallelizable_portion": 0.9,
+      "s3_bandwidth": 1000
+    },
+    "dwaas": {
+      "cost_per_second_redshift": 0.00030166666,
+      "spot_discount": 0.5,
+      "use_spot_instances": false,
+      "cold_start_delay": 60.0
+    },
+    "ep": {
+      "cost_per_rpu_hour": 0.375,
+      "cache_warmup_gamma": 0.05,
+      "cold_start_delay": 120.0
+    },
+    "qaas": {
+      "cost_per_slot_hour": 0.04,
+      "qaas_cost_per_tb": 5.0,
+      "qaas_io_per_core_bw": 150,
+      "qaas_shuffle_bw_per_core": 50,
+      "qaas_base_cores": 4,
+      "qaas_base_time_limit": 2,
+      "core_alloc_window": 10.0
+    }
+  },
+  "scenarios": [
+    {
+      "name": "scenario3_1_hit_rate_workload999",
+      "description": "Subscenario 3-1: Varying hit rate (0.5, 0.6, 0.7) in DWaaS vs QaaS - Workload 999",
+      "dataset": 999,
+      "nodes": 4,
+      "instance": 0,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 650,
+      "memory_bandwidth": 40000,
+      "total_memory_capacity_mb": 128000,
+      "runs": [
+        {
+          "name": "dwaas_hit_rate_50",
+          "architecture": "DWAAS",
+          "hit_rate": 0.5
+        },
+        {
+          "name": "dwaas_hit_rate_60",
+          "architecture": "DWAAS",
+          "hit_rate": 0.6
+        },
+        {
+          "name": "dwaas_hit_rate_70",
+          "architecture": "DWAAS",
+          "hit_rate": 0.7
+        },
+        {
+          "name": "qaas_baseline",
+          "architecture": "QAAS"
+        }
+      ]
+    },
+    {
+      "name": "scenario3_2_hit_rate_workload998",
+      "description": "Subscenario 3-2: Varying hit rate (0.5, 0.6, 0.7) in DWaaS vs QaaS - Workload 998",
+      "dataset": 998,
+      "nodes": 4,
+      "instance": 0,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 650,
+      "memory_bandwidth": 40000,
+      "total_memory_capacity_mb": 128000,
+      "runs": [
+        {
+          "name": "dwaas_hit_rate_50",
+          "architecture": "DWAAS",
+          "hit_rate": 0.5
+        },
+        {
+          "name": "dwaas_hit_rate_60",
+          "architecture": "DWAAS",
+          "hit_rate": 0.6
+        },
+        {
+          "name": "dwaas_hit_rate_70",
+          "architecture": "DWAAS",
+          "hit_rate": 0.7
+        },
+        {
+          "name": "qaas_baseline",
+          "architecture": "QAAS"
+        }
+      ]
+    },
+    {
+      "name": "scenario3_3_dram_capacity",
+      "description": "Subscenario 3-3: Varying DRAM capacity with hit rate - (32GB, 0.7), (48GB, 0.75), (64GB, 0.8)",
+      "architecture": "DWAAS",
+      "dataset": 999,
+      "nodes": 4,
+      "instance": 0,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 650,
+      "memory_bandwidth": 40000,
+      "runs": [
+        {
+          "name": "dram_32gb_hit_70",
+          "hit_rate": 0.7,
+          "total_memory_capacity_mb": 32768
+        },
+        {
+          "name": "dram_48gb_hit_75",
+          "hit_rate": 0.75,
+          "total_memory_capacity_mb": 49152
+        },
+        {
+          "name": "dram_64gb_hit_80",
+          "hit_rate": 0.8,
+          "total_memory_capacity_mb": 65536
+        }
+      ]
+    },
+    {
+      "name": "scenario3_4_warmup_rate",
+      "description": "Subscenario 3-4: Varying cache warm-up rate (0.05, 0.1, 0.2) in Elastic Pool",
+      "architecture": "ELASTIC_POOL",
+      "dataset": 999,
+      "vpu": 16,
+      "hit_rate": 0.8,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 1200,
+      "memory_bandwidth": 40000,
+      "total_memory_capacity_mb": 96000,
+      "cold_start": 120.0,
+      "runs": [
+        {
+          "name": "warmup_rate_005",
+          "config_overrides": {
+            "cache_warmup_gamma": 0.05
+          },
+          "scaling": {
+            "policy": "queue",
+            "queue": {
+              "length_thresholds": [10, 20, 30],
+              "scale_steps": [8, 16, 24],
+              "scale_in_utilization": 0.3,
+              "scale_in_step": 8
+            }
+          }
+        },
+        {
+          "name": "warmup_rate_010",
+          "config_overrides": {
+            "cache_warmup_gamma": 0.1
+          },
+          "scaling": {
+            "policy": "queue",
+            "queue": {
+              "length_thresholds": [10, 20, 30],
+              "scale_steps": [8, 16, 24],
+              "scale_in_utilization": 0.3,
+              "scale_in_step": 8
+            }
+          }
+        },
+        {
+          "name": "warmup_rate_020",
+          "config_overrides": {
+            "cache_warmup_gamma": 0.2
+          },
+          "scaling": {
+            "policy": "queue",
+            "queue": {
+              "length_thresholds": [10, 20, 30],
+              "scale_steps": [8, 16, 24],
+              "scale_in_utilization": 0.3,
+              "scale_in_step": 8
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,284 @@
+{
+  "defaults": {
+    "simulation": {
+      "scale_factor_min": 1,
+      "scale_factor_max": 100,
+      "shuffle_percentage_min": 0.1,
+      "shuffle_percentage_max": 0.35,
+      "interrupt_probability": 0.01,
+      "interrupt_duration": 6000,
+      "logging_interval": 60,
+      "default_max_duration": 108000,
+      "default_estimator": "pm",
+      "pm_p": 4.0,
+      "delta": 0.3,
+      "queue_agg": "sum",
+      "materialization_fraction": 0.25,
+      "parallelizable_portion": 0.9,
+      "s3_bandwidth": 1000
+    },
+    "dwaas": {
+      "cost_per_second_redshift": 0.00030166666,
+      "spot_discount": 0.5,
+      "use_spot_instances": false,
+      "cold_start_delay": 60.0
+    },
+    "scheduling": {
+      "policy": "sjf",
+      "max_io_concurrency": null,
+      "max_cpu_concurrency": null,
+      "multi_level_queues": []
+    },
+    "scaling": {
+      "policy": "queue",
+      "queue": {
+        "length_thresholds": [5, 10, 15, 20],
+        "scale_steps": [4, 8, 12, 16],
+        "scale_in_utilization": 0.4,
+        "scale_in_step": 4
+      },
+      "reactive": {
+        "cpu_utilization_thresholds": [0.6, 0.7, 0.8],
+        "scale_steps": [8, 16, 24],
+        "scale_in_utilization": 0.2,
+        "scale_in_step": 8
+      },
+      "predictive": {
+        "growth_factor": 1.2,
+        "decline_factor": 0.75,
+        "history": 3,
+        "observation_interval": 10000,
+        "scale_step": 4,
+        "utilization_ceiling": 0.75
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "name": "scenario1_workload_management",
+      "description": "DWaaS Workload Management Analysis: 3 Scheduling Algorithms x 4 Scaling Policies = 12 runs",
+      "dataset": 999,
+      "nodes": 4,
+      "instance": 0,
+      "hit_rate": 0.7,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 650,
+      "memory_bandwidth": 40000,
+      "total_memory_capacity_mb": 128000,
+      "runs": [
+        {
+          "name": "fcfs_no_scaling",
+          "description": "FCFS with static DWaaS (no scaling)",
+          "architecture": "DWAAS",
+          "scheduling": {
+            "policy": "fcfs"
+          }
+        },
+        {
+          "name": "fcfs_reactive_scaling",
+          "description": "FCFS with reactive autoscaling",
+          "architecture": "DWAAS_AUTOSCALING",
+          "cold_start": 60.0,
+          "scheduling": {
+            "policy": "fcfs"
+          },
+          "scaling": {
+            "policy": "reactive",
+            "reactive": {
+              "cpu_utilization_thresholds": [0.6, 0.7, 0.8],
+              "scale_steps": [8, 16, 24],
+              "scale_in_utilization": 0.2,
+              "scale_in_step": 8
+            }
+          }
+        },
+        {
+          "name": "fcfs_queue_scaling",
+          "description": "FCFS with queue-based autoscaling",
+          "architecture": "DWAAS_AUTOSCALING",
+          "cold_start": 60.0,
+          "scheduling": {
+            "policy": "fcfs"
+          },
+          "scaling": {
+            "policy": "queue",
+            "queue": {
+              "length_thresholds": [5, 10, 15, 20],
+              "scale_steps": [4, 8, 12, 16],
+              "scale_in_utilization": 0.4,
+              "scale_in_step": 4
+            }
+          }
+        },
+        {
+          "name": "fcfs_predictive_scaling",
+          "description": "FCFS with predictive autoscaling",
+          "architecture": "DWAAS_AUTOSCALING",
+          "cold_start": 60.0,
+          "scheduling": {
+            "policy": "fcfs"
+          },
+          "scaling": {
+            "policy": "predictive",
+            "predictive": {
+              "growth_factor": 1.2,
+              "decline_factor": 0.75,
+              "history": 3,
+              "observation_interval": 10000,
+              "scale_step": 4,
+              "utilization_ceiling": 0.75
+            }
+          }
+        },
+        {
+          "name": "sjf_no_scaling",
+          "description": "SJF with static DWaaS (no scaling)",
+          "architecture": "DWAAS",
+          "scheduling": {
+            "policy": "sjf"
+          }
+        },
+        {
+          "name": "sjf_reactive_scaling",
+          "description": "SJF with reactive autoscaling",
+          "architecture": "DWAAS_AUTOSCALING",
+          "cold_start": 60.0,
+          "scheduling": {
+            "policy": "sjf"
+          },
+          "scaling": {
+            "policy": "reactive",
+            "reactive": {
+              "cpu_utilization_thresholds": [0.6, 0.7, 0.8],
+              "scale_steps": [8, 16, 24],
+              "scale_in_utilization": 0.2,
+              "scale_in_step": 8
+            }
+          }
+        },
+        {
+          "name": "sjf_queue_scaling",
+          "description": "SJF with queue-based autoscaling",
+          "architecture": "DWAAS_AUTOSCALING",
+          "cold_start": 60.0,
+          "scheduling": {
+            "policy": "sjf"
+          },
+          "scaling": {
+            "policy": "queue",
+            "queue": {
+              "length_thresholds": [5, 10, 15, 20],
+              "scale_steps": [4, 8, 12, 16],
+              "scale_in_utilization": 0.4,
+              "scale_in_step": 4
+            }
+          }
+        },
+        {
+          "name": "sjf_predictive_scaling",
+          "description": "SJF with predictive autoscaling",
+          "architecture": "DWAAS_AUTOSCALING",
+          "cold_start": 60.0,
+          "scheduling": {
+            "policy": "sjf"
+          },
+          "scaling": {
+            "policy": "predictive",
+            "predictive": {
+              "growth_factor": 1.2,
+              "decline_factor": 0.75,
+              "history": 3,
+              "observation_interval": 10000,
+              "scale_step": 4,
+              "utilization_ceiling": 0.75
+            }
+          }
+        },
+        {
+          "name": "mlq_no_scaling",
+          "description": "Multi-Level Queue with static DWaaS (no scaling)",
+          "architecture": "DWAAS",
+          "scheduling": {
+            "policy": "multi_level",
+            "multi_level_queues": [
+              {"priority": 0, "time_quantum": 10},
+              {"priority": 1, "time_quantum": 20},
+              {"priority": 2, "time_quantum": 40}
+            ]
+          }
+        },
+        {
+          "name": "mlq_reactive_scaling",
+          "description": "Multi-Level Queue with reactive autoscaling",
+          "architecture": "DWAAS_AUTOSCALING",
+          "cold_start": 60.0,
+          "scheduling": {
+            "policy": "multi_level",
+            "multi_level_queues": [
+              {"priority": 0, "time_quantum": 10},
+              {"priority": 1, "time_quantum": 20},
+              {"priority": 2, "time_quantum": 40}
+            ]
+          },
+          "scaling": {
+            "policy": "reactive",
+            "reactive": {
+              "cpu_utilization_thresholds": [0.6, 0.7, 0.8],
+              "scale_steps": [8, 16, 24],
+              "scale_in_utilization": 0.2,
+              "scale_in_step": 8
+            }
+          }
+        },
+        {
+          "name": "mlq_queue_scaling",
+          "description": "Multi-Level Queue with queue-based autoscaling",
+          "architecture": "DWAAS_AUTOSCALING",
+          "cold_start": 60.0,
+          "scheduling": {
+            "policy": "multi_level",
+            "multi_level_queues": [
+              {"priority": 0, "time_quantum": 10},
+              {"priority": 1, "time_quantum": 20},
+              {"priority": 2, "time_quantum": 40}
+            ]
+          },
+          "scaling": {
+            "policy": "queue",
+            "queue": {
+              "length_thresholds": [5, 10, 15, 20],
+              "scale_steps": [4, 8, 12, 16],
+              "scale_in_utilization": 0.4,
+              "scale_in_step": 4
+            }
+          }
+        },
+        {
+          "name": "mlq_predictive_scaling",
+          "description": "Multi-Level Queue with predictive autoscaling",
+          "architecture": "DWAAS_AUTOSCALING",
+          "cold_start": 60.0,
+          "scheduling": {
+            "policy": "multi_level",
+            "multi_level_queues": [
+              {"priority": 0, "time_quantum": 10},
+              {"priority": 1, "time_quantum": 20},
+              {"priority": 2, "time_quantum": 40}
+            ]
+          },
+          "scaling": {
+            "policy": "predictive",
+            "predictive": {
+              "growth_factor": 1.2,
+              "decline_factor": 0.75,
+              "history": 3,
+              "observation_interval": 10000,
+              "scale_step": 4,
+              "utilization_ceiling": 0.75
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
