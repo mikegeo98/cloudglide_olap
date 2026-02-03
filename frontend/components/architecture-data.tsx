@@ -30,6 +30,8 @@ import { z } from "zod";
 import { createArchitectureSchema, ZodDWAAS, ZodDWAASAutoscaling, ZodElasticPool, ZodQAAS } from "@/lib/zod-schemas";
 import { ArchitectureType, instanceTypes } from "@/lib/config";
 import { ChevronsUpDown, Plus } from "lucide-react";
+import InteractiveCluster from "./interactive-cluster";
+import ClusterView from "./cluster-view";
 
 export default function ArchitectureData() {
     const { data, stage, setStage, setData } = React.useContext(InputContext)
@@ -47,7 +49,7 @@ export default function ArchitectureData() {
     }
 
     return (
-        <div className="flex flex-col items-center gap-8 w-[800px] px-6 max-h-full overflow-y-auto">
+        <div className="flex flex-col items-center gap-8 w-[1000px] px-6 max-h-full overflow-y-auto">
             <h1>Architecture</h1>
             {data.scenarios.map((scenario, index) => {
                 let form = null
@@ -105,7 +107,7 @@ export default function ArchitectureData() {
             ) : null}
             {add || data.scenarios.length === 0 ? (
                 <>
-                    <RadioGroup onValueChange={(value) => setArch(value)}>
+                    <RadioGroup className="flex w-full justify-between" onValueChange={(value) => setArch(value)}>
                         {Object.values(ArchitectureType).map((archType) => (
                             <div key={archType} className="flex items-center gap-3">
                                 <RadioGroupItem value={archType} id={archType} />
@@ -208,214 +210,223 @@ function DWAASForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS>> }) 
     }, [nodes, instance])
 
     return (
-        <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-6">
-                <div className="grid grid-cols-2 gap-3">
-                    <FormField
-                        control={form.control}
-                        name="nodes"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Number of Nodes</FormLabel>
-                                <FormControl>
-                                    <Input type="number" defaultValue={field.value} onChange={(e) => {
-                                        field.onChange(Number.parseInt(e.target.value))
-                                        setNodes(Number.parseInt(e.target.value))
-                                    }} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="hit_rate"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Hit Rate</FormLabel>
-                                <FormControl>
-                                    <Input type="number" defaultValue={field.value} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="instance"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Instance Type</FormLabel>
-                                <FormControl>
-                                    <Select
-                                        defaultValue={field.value?.toString()}
-                                        onValueChange={(e) => {
-                                            field.onChange(Number.parseInt(e))
-                                            setInstance(Number.parseInt(e))
-                                        }}>
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Dropdown" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="0">ra3.xlplus</SelectItem>
-                                            <SelectItem value="1">ra3.4xlarge</SelectItem>
-                                            <SelectItem value="2">ra3.16xlarge</SelectItem>
-                                            <SelectItem value="3">c5d.xlarge</SelectItem>
-                                            <SelectItem value="4">c5d.2xlarge</SelectItem>
-                                            <SelectItem value="5">c5d.4xlarge</SelectItem>
-                                            <SelectItem value="6">ra3.xlplus (alt)</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
+        <div className="flex w-full justify-center gap-6">
+            <div className="flex-1 max-w-1/2">
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-6">
+                        <div className="grid grid-cols-2 gap-3">
+                            <FormField
+                                control={form.control}
+                                name="nodes"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Number of Nodes</FormLabel>
+                                        <FormControl>
+                                            <Input type="number" defaultValue={field.value} onChange={(e) => {
+                                                field.onChange(Number.parseInt(e.target.value))
+                                                setNodes(Number.parseInt(e.target.value))
+                                            }} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="hit_rate"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Hit Rate</FormLabel>
+                                        <FormControl>
+                                            <Input type="number" defaultValue={field.value} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="instance"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Instance Type</FormLabel>
+                                        <FormControl>
+                                            <Select
+                                                defaultValue={field.value?.toString()}
+                                                onValueChange={(e) => {
+                                                    field.onChange(Number.parseInt(e))
+                                                    setInstance(Number.parseInt(e))
+                                                }}>
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Dropdown" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="0">ra3.xlplus</SelectItem>
+                                                    <SelectItem value="1">ra3.4xlarge</SelectItem>
+                                                    <SelectItem value="2">ra3.16xlarge</SelectItem>
+                                                    <SelectItem value="3">c5d.xlarge</SelectItem>
+                                                    <SelectItem value="4">c5d.2xlarge</SelectItem>
+                                                    <SelectItem value="5">c5d.4xlarge</SelectItem>
+                                                    <SelectItem value="6">ra3.xlplus (alt)</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                        {(nodes !== undefined && instance !== undefined) || scenario ?
+                            <Collapsible className="space-y-6">
+                                <CollapsibleTrigger asChild>
+                                    <div className="flex items-center justify-between gap-3 px-4 bg-secondary rounded-md">
+                                        <h4 className="text-sm font-semibold">
+                                            Optional Parameters
+                                        </h4>
+                                        <Button variant="ghost" size="icon" className="size-8">
+                                            <ChevronsUpDown />
+                                            <span className="sr-only">Toggle</span>
+                                        </Button>
+                                    </div>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <FormField
+                                            control={form.control}
+                                            name="cpu_cores"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>CPU Cores</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="network_bandwidth"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Network Bandwidth</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="io_bandwidth"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>I/O Bandwidth</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="memory_bandwidth"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Memory Bandwidth</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="total_memory_capacity_mb"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Total Memory Capacity</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <FormField
+                                            control={form.control}
+                                            name="scheduling.policy"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Scheduling policy</FormLabel>
+                                                    <FormControl>
+                                                        <Select
+                                                            defaultValue={field.value}
+                                                            onValueChange={field.onChange}>
+                                                            <SelectTrigger className="w-full">
+                                                                <SelectValue placeholder="Dropdown" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="fcfs">First Come First Serve</SelectItem>
+                                                                <SelectItem value="sjf">Shortest Job First</SelectItem>
+                                                                <SelectItem value="ljf">Longest Job First</SelectItem>
+                                                                <SelectItem value="multi_level">Multi Level</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="scheduling.max_io_concurrency"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Max concurrent I/O jobs</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="scheduling.max_cpu_concurrency"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Max concurrent CPU jobs</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                </CollapsibleContent>
+                            </Collapsible>
+                            : null}
+                        {scenario ? (
+                            <Button type="submit" variant="default">
+                                {loading ? <Spinner /> : "save"}
+                            </Button>
+                        ) : <NextButton />}
+                    </form>
+                </Form>
+            </div>
+            {nodes !== undefined && instance !== undefined
+                ? <div className="flex-1">
+                    <ClusterView nodes={nodes} instanceType={instanceTypes[instance]} />
                 </div>
-                {(nodes !== undefined && instance !== undefined) || scenario ?
-                    <Collapsible className="space-y-6">
-                        <CollapsibleTrigger asChild>
-                            <div className="flex items-center justify-between gap-3 px-4 bg-secondary rounded-md">
-                                <h4 className="text-sm font-semibold">
-                                    Optional Parameters
-                                </h4>
-                                <Button variant="ghost" size="icon" className="size-8">
-                                    <ChevronsUpDown />
-                                    <span className="sr-only">Toggle</span>
-                                </Button>
-                            </div>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="space-y-3">
-                            <div className="grid grid-cols-3 gap-3">
-                                <FormField
-                                    control={form.control}
-                                    name="cpu_cores"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>CPU Cores</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="network_bandwidth"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Network Bandwidth</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="io_bandwidth"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>I/O Bandwidth</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="memory_bandwidth"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Memory Bandwidth</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="total_memory_capacity_mb"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Total Memory Capacity</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-                            <div className="grid grid-cols-3 gap-3">
-                                <FormField
-                                    control={form.control}
-                                    name="scheduling.policy"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Scheduling policy</FormLabel>
-                                            <FormControl>
-                                                <Select
-                                                    defaultValue={field.value}
-                                                    onValueChange={field.onChange}>
-                                                    <SelectTrigger className="w-full">
-                                                        <SelectValue placeholder="Dropdown" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="fcfs">First Come First Serve</SelectItem>
-                                                        <SelectItem value="sjf">Shortest Job First</SelectItem>
-                                                        <SelectItem value="ljf">Longest Job First</SelectItem>
-                                                        <SelectItem value="multi_level">Multi Level</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="scheduling.max_io_concurrency"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Max concurrent I/O jobs</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="scheduling.max_cpu_concurrency"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Max concurrent CPU jobs</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-                        </CollapsibleContent>
-                    </Collapsible>
-                    : null}
-                {scenario ? (
-                    <Button type="submit" variant="default">
-                        {loading ? <Spinner /> : "save"}
-                    </Button>
-                ) : <NextButton />}
-            </form>
-        </Form>
+                : null}
+        </div>
     )
 }
 
@@ -493,249 +504,258 @@ function DWAASAutoscalingForm({ scenario }: { scenario?: z.infer<z.ZodObject<Zod
     }, [nodes, instance])
 
     return (
-        <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-6">
-                <div className="grid grid-cols-2 gap-3">
-                    <FormField
-                        control={form.control}
-                        name="nodes"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Nodes</FormLabel>
-                                <FormControl>
-                                    <Input type="number" defaultValue={field.value} onChange={(e) => {
-                                        field.onChange(Number.parseInt(e.target.value))
-                                        setNodes(Number.parseInt(e.target.value))
-                                    }} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="hit_rate"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Cache Hit Rate</FormLabel>
-                                <FormControl>
-                                    <Input type="number" defaultValue={field.value} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="cold_start"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Cold Start Delay in seconds</FormLabel>
-                                <FormControl>
-                                    <Input type="number" defaultValue={field.value} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="instance"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Instance Type</FormLabel>
-                                <FormControl>
-                                    <Select
-                                        defaultValue={field.value?.toString()}
-                                        onValueChange={(e) => {
-                                            field.onChange(Number.parseInt(e))
-                                            setInsance(Number.parseInt(e))
-                                        }}>
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Dropdown" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="0">ra3.xlplus</SelectItem>
-                                            <SelectItem value="1">ra3.4xlarge</SelectItem>
-                                            <SelectItem value="2">ra3.16xlarge</SelectItem>
-                                            <SelectItem value="3">c5d.xlarge</SelectItem>
-                                            <SelectItem value="4">c5d.2xlarge</SelectItem>
-                                            <SelectItem value="5">c5d.4xlarge</SelectItem>
-                                            <SelectItem value="6">ra3.xlplus (alt)</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="scaling.policy"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Scaling Policy</FormLabel>
-                                <FormControl>
-                                    <Select defaultValue={field.value} onValueChange={field.onChange}>
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Dropdown" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="queue">queue</SelectItem>
-                                            <SelectItem value="reactive">reactive</SelectItem>
-                                            <SelectItem value="predictive">predictive</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
+        <div className="flex w-full justify-center gap-6">
+            <div className="flex-1 max-w-1/2">
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-6">
+                        <div className="grid grid-cols-2 gap-3">
+                            <FormField
+                                control={form.control}
+                                name="nodes"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Nodes</FormLabel>
+                                        <FormControl>
+                                            <Input type="number" defaultValue={field.value} onChange={(e) => {
+                                                field.onChange(Number.parseInt(e.target.value))
+                                                setNodes(Number.parseInt(e.target.value))
+                                            }} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="hit_rate"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Cache Hit Rate</FormLabel>
+                                        <FormControl>
+                                            <Input type="number" defaultValue={field.value} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="cold_start"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Cold Start Delay in seconds</FormLabel>
+                                        <FormControl>
+                                            <Input type="number" defaultValue={field.value} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="instance"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Instance Type</FormLabel>
+                                        <FormControl>
+                                            <Select
+                                                defaultValue={field.value?.toString()}
+                                                onValueChange={(e) => {
+                                                    field.onChange(Number.parseInt(e))
+                                                    setInsance(Number.parseInt(e))
+                                                }}>
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Dropdown" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="0">ra3.xlplus</SelectItem>
+                                                    <SelectItem value="1">ra3.4xlarge</SelectItem>
+                                                    <SelectItem value="2">ra3.16xlarge</SelectItem>
+                                                    <SelectItem value="3">c5d.xlarge</SelectItem>
+                                                    <SelectItem value="4">c5d.2xlarge</SelectItem>
+                                                    <SelectItem value="5">c5d.4xlarge</SelectItem>
+                                                    <SelectItem value="6">ra3.xlplus (alt)</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="scaling.policy"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Scaling Policy</FormLabel>
+                                        <FormControl>
+                                            <Select defaultValue={field.value} onValueChange={field.onChange}>
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Dropdown" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="queue">queue</SelectItem>
+                                                    <SelectItem value="reactive">reactive</SelectItem>
+                                                    <SelectItem value="predictive">predictive</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                        {(nodes !== undefined && instance !== undefined) || scenario ?
+                            <Collapsible className="space-y-6">
+                                <CollapsibleTrigger asChild>
+                                    <div className="flex items-center justify-between gap-3 px-4 bg-secondary rounded-md">
+                                        <h4 className="text-sm font-semibold">
+                                            Optional Parameters
+                                        </h4>
+                                        <Button variant="ghost" size="icon" className="size-8">
+                                            <ChevronsUpDown />
+                                            <span className="sr-only">Toggle</span>
+                                        </Button>
+                                    </div>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <FormField
+                                            control={form.control}
+                                            name="network_bandwidth"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Network Bandwidth</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="io_bandwidth"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>I/O Bandwidth</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="memory_bandwidth"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Memory Bandwidth</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="total_memory_capacity_mb"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Total Memory Capacity</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="use_spot_instances"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Use Spot Instances (50% discount)</FormLabel>
+                                                    <FormControl>
+                                                        <Switch defaultChecked={field.value} onCheckedChange={field.onChange} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <FormField
+                                            control={form.control}
+                                            name="scheduling.policy"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Scheduling policy</FormLabel>
+                                                    <FormControl>
+                                                        <Select
+                                                            defaultValue={field.value}
+                                                            onValueChange={(e) => field.onChange(e)}>
+                                                            <SelectTrigger className="w-full">
+                                                                <SelectValue placeholder="Dropdown" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="fcfs">First Come First Serve</SelectItem>
+                                                                <SelectItem value="sjf">Shortest Job First</SelectItem>
+                                                                <SelectItem value="ljf">Longest Job First</SelectItem>
+                                                                <SelectItem value="multi_level">Multi Level</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="scheduling.max_io_concurrency"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Max concurrent I/O jobs</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="scheduling.max_cpu_concurrency"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Max concurrent CPU jobs</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                </CollapsibleContent>
+                            </Collapsible>
+                            : null}
+                        {scenario ? (
+                            <Button type="submit" variant="default">
+                                {loading ? <Spinner /> : "save"}
+                            </Button>
+                        ) : <NextButton />}
+                    </form>
+                </Form>
+            </div>
+            {nodes !== undefined && instance !== undefined
+                ? <div className="flex-1">
+                    <ClusterView nodes={nodes} instanceType={instanceTypes[instance]} />
                 </div>
-                {(nodes !== undefined && instance !== undefined) || scenario ?
-                    <Collapsible className="space-y-6">
-                        <CollapsibleTrigger asChild>
-                            <div className="flex items-center justify-between gap-3 px-4 bg-secondary rounded-md">
-                                <h4 className="text-sm font-semibold">
-                                    Optional Parameters
-                                </h4>
-                                <Button variant="ghost" size="icon" className="size-8">
-                                    <ChevronsUpDown />
-                                    <span className="sr-only">Toggle</span>
-                                </Button>
-                            </div>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="space-y-3">
-                            <div className="grid grid-cols-3 gap-3">
-                                <FormField
-                                    control={form.control}
-                                    name="network_bandwidth"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Network Bandwidth</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="io_bandwidth"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>I/O Bandwidth</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="memory_bandwidth"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Memory Bandwidth</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="total_memory_capacity_mb"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Total Memory Capacity</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="use_spot_instances"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Use Spot Instances (50% discount)</FormLabel>
-                                            <FormControl>
-                                                <Switch defaultChecked={field.value} onCheckedChange={field.onChange} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-                            <div className="grid grid-cols-3 gap-3">
-                                <FormField
-                                    control={form.control}
-                                    name="scheduling.policy"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Scheduling policy</FormLabel>
-                                            <FormControl>
-                                                <Select
-                                                    defaultValue={field.value}
-                                                    onValueChange={(e) => field.onChange(e)}>
-                                                    <SelectTrigger className="w-full">
-                                                        <SelectValue placeholder="Dropdown" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="fcfs">First Come First Serve</SelectItem>
-                                                        <SelectItem value="sjf">Shortest Job First</SelectItem>
-                                                        <SelectItem value="ljf">Longest Job First</SelectItem>
-                                                        <SelectItem value="multi_level">Multi Level</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="scheduling.max_io_concurrency"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Max concurrent I/O jobs</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="scheduling.max_cpu_concurrency"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Max concurrent CPU jobs</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-                        </CollapsibleContent>
-                    </Collapsible>
-                    : null}
-                {scenario ? (
-                    <Button type="submit" variant="default">
-                        {loading ? <Spinner /> : "save"}
-                    </Button>
-                ) : <NextButton />}
-            </form>
-        </Form>
+                : null}
+        </div>
     )
 }
 
@@ -800,205 +820,209 @@ function ElasticPoolForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS
     }, [vpu])
 
     return (
-        <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-6">
-                <div className="grid grid-cols-2 gap-3">
-                    <FormField
-                        control={form.control}
-                        name="vpu"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Virtual Processing Units (RPUs)</FormLabel>
-                                <FormControl>
-                                    <Input type="number" defaultValue={field.value} onChange={(e) => {
-                                        field.onChange(Number.parseInt(e.target.value))
-                                        setVPUs(Number.parseInt(e.target.value))
-                                    }} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="hit_rate"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Cache Hit Rate</FormLabel>
-                                <FormControl>
-                                    <Input type="number" defaultValue={field.value} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="cold_start"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Cold Start Delay in seconds</FormLabel>
-                                <FormControl>
-                                    <Input type="number" defaultValue={field.value} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                    <FormField
-                        control={form.control}
-                        name="scaling.policy"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Scaling Policy</FormLabel>
-                                <FormControl>
-                                    <Select defaultValue={field.value} onValueChange={field.onChange}>
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Dropdown" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="queue">queue</SelectItem>
-                                            <SelectItem value="reactive">reactive</SelectItem>
-                                            <SelectItem value="predictive">predictive</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                </div>
-                {vpu !== undefined || scenario ?
-                    <Collapsible className="space-y-6">
-                        <CollapsibleTrigger asChild>
-                            <div className="flex items-center justify-between gap-3 px-4 bg-secondary rounded-md">
-                                <h4 className="text-sm font-semibold">
-                                    Optional Parameters
-                                </h4>
-                                <Button variant="ghost" size="icon" className="size-8">
-                                    <ChevronsUpDown />
-                                    <span className="sr-only">Toggle</span>
-                                </Button>
-                            </div>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="space-y-3">
-                            <div className="grid grid-cols-3 gap-3">
-                                <FormField
-                                    control={form.control}
-                                    name="network_bandwidth"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Network Bandwidth</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="io_bandwidth"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>I/O Bandwidth</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="memory_bandwidth"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Memory Bandwidth</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="total_memory_capacity_mb"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Total Memory Capacity</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-                            <div className="grid grid-cols-3 gap-3">
-                                <FormField
-                                    control={form.control}
-                                    name="scheduling.policy"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Scheduling policy</FormLabel>
-                                            <FormControl>
-                                                <Select
-                                                    defaultValue={field.value}
-                                                    onValueChange={field.onChange}>
-                                                    <SelectTrigger className="w-full">
-                                                        <SelectValue placeholder="Dropdown" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="fcfs">First Come First Serve</SelectItem>
-                                                        <SelectItem value="sjf">Shortest Job First</SelectItem>
-                                                        <SelectItem value="ljf">Longest Job First</SelectItem>
-                                                        <SelectItem value="multi_level">Multi Level</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="scheduling.max_io_concurrency"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Max concurrent I/O jobs</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name="scheduling.max_cpu_concurrency"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Max concurrent CPU jobs</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-                        </CollapsibleContent>
-                    </Collapsible>
-                    : null}
-                {scenario ? (
-                    <Button type="submit" variant="default">
-                        {loading ? <Spinner /> : "save"}
-                    </Button>
-                ) : <NextButton />}
-            </form>
-        </Form>
+        <div className="flex w-full justify-center gap-6">
+            <div className="flex-1 max-w-1/2">
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-6">
+                        <div className="grid grid-cols-2 gap-3">
+                            <FormField
+                                control={form.control}
+                                name="vpu"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Virtual Processing Units (RPUs)</FormLabel>
+                                        <FormControl>
+                                            <Input type="number" defaultValue={field.value} onChange={(e) => {
+                                                field.onChange(Number.parseInt(e.target.value))
+                                                setVPUs(Number.parseInt(e.target.value))
+                                            }} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="hit_rate"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Cache Hit Rate</FormLabel>
+                                        <FormControl>
+                                            <Input type="number" defaultValue={field.value} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="cold_start"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Cold Start Delay in seconds</FormLabel>
+                                        <FormControl>
+                                            <Input type="number" defaultValue={field.value} step="any" onChange={(e) => field.onChange(Number.parseFloat(e.target.value))} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="scaling.policy"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Scaling Policy</FormLabel>
+                                        <FormControl>
+                                            <Select defaultValue={field.value} onValueChange={field.onChange}>
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Dropdown" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="queue">queue</SelectItem>
+                                                    <SelectItem value="reactive">reactive</SelectItem>
+                                                    <SelectItem value="predictive">predictive</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                        {vpu !== undefined || scenario ?
+                            <Collapsible className="space-y-6">
+                                <CollapsibleTrigger asChild>
+                                    <div className="flex items-center justify-between gap-3 px-4 bg-secondary rounded-md">
+                                        <h4 className="text-sm font-semibold">
+                                            Optional Parameters
+                                        </h4>
+                                        <Button variant="ghost" size="icon" className="size-8">
+                                            <ChevronsUpDown />
+                                            <span className="sr-only">Toggle</span>
+                                        </Button>
+                                    </div>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <FormField
+                                            control={form.control}
+                                            name="network_bandwidth"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Network Bandwidth</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="io_bandwidth"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>I/O Bandwidth</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="memory_bandwidth"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Memory Bandwidth</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="total_memory_capacity_mb"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Total Memory Capacity</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <FormField
+                                            control={form.control}
+                                            name="scheduling.policy"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Scheduling policy</FormLabel>
+                                                    <FormControl>
+                                                        <Select
+                                                            defaultValue={field.value}
+                                                            onValueChange={field.onChange}>
+                                                            <SelectTrigger className="w-full">
+                                                                <SelectValue placeholder="Dropdown" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="fcfs">First Come First Serve</SelectItem>
+                                                                <SelectItem value="sjf">Shortest Job First</SelectItem>
+                                                                <SelectItem value="ljf">Longest Job First</SelectItem>
+                                                                <SelectItem value="multi_level">Multi Level</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="scheduling.max_io_concurrency"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Max concurrent I/O jobs</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="scheduling.max_cpu_concurrency"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Max concurrent CPU jobs</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" value={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                </CollapsibleContent>
+                            </Collapsible>
+                            : null}
+                        {scenario ? (
+                            <Button type="submit" variant="default">
+                                {loading ? <Spinner /> : "save"}
+                            </Button>
+                        ) : <NextButton />}
+                    </form>
+                </Form>
+            </div>
+        </div>
     )
 }
 
@@ -1046,27 +1070,31 @@ function QAASForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS>> }) {
     }
 
     return (
-        <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <FormField
-                    control={form.control}
-                    name="network_bandwidth"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Network bandwidth</FormLabel>
-                            <FormControl>
-                                <Input type="number" defaultValue={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-                {scenario ? (
-                    <Button type="submit" variant="default">
-                        {loading ? <Spinner /> : "save"}
-                    </Button>
-                ) : <NextButton />}
-            </form>
-        </Form>
+        <div className="flex w-full justify-center gap-6">
+            <div className="flex-1 max-w-1/2">
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                        <FormField
+                            control={form.control}
+                            name="network_bandwidth"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Network bandwidth</FormLabel>
+                                    <FormControl>
+                                        <Input type="number" defaultValue={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        {scenario ? (
+                            <Button type="submit" variant="default">
+                                {loading ? <Spinner /> : "save"}
+                            </Button>
+                        ) : <NextButton />}
+                    </form>
+                </Form>
+            </div>
+        </div>
     )
 }
