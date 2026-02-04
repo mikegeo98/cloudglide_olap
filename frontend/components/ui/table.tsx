@@ -19,6 +19,21 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
   )
 }
 
+function UnscrollableTable({ className, ...props }: React.ComponentProps<"table">) {
+  return (
+    <div
+      data-slot="table-container"
+      className="relative w-full overflow-x-hidden"
+    >
+      <table
+        data-slot="table"
+        className={cn("w-full caption-bottom text-sm", className)}
+        {...props}
+      />
+    </div>
+  )
+}
+
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
@@ -106,6 +121,7 @@ function TableCaption({
 
 export {
   Table,
+  UnscrollableTable,
   TableHeader,
   TableBody,
   TableFooter,

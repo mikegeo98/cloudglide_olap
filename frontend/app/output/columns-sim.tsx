@@ -14,6 +14,12 @@ export type Simulation = {
     io: number
     cpu: number
     shuffle: number
+    io_start_timestamp: number
+    io_end_timestamp: number
+    cpu_start_timestamp: number
+    cpu_end_timestamp: number
+    shuffle_start_timestamp: number
+    shuffle_end_timestamp: number
     query_duration_with_queue: number
     query_duration: number
     mon_cost: number
@@ -66,6 +72,30 @@ export const columns: ColumnDef<Simulation>[] = [
         accessorKey: "shuffle",
         header: "Shuffle",
         cell: ({ row }) => row.original.shuffle.toFixed(4)
+    },
+    {
+        accessorKey: "io_start_timestamp",
+        header: "IO Start Timestamp",
+    },
+    {
+        accessorKey: "io_end_timestamp",
+        header: "IO End Timestamp",
+    },
+    {
+        accessorKey: "cpu_start_timestamp",
+        header: "CPU Start Timestamp",
+    },
+    {
+        accessorKey: "cpu_end_timestamp",
+        header: "CPU End Timestamp",
+    },
+    {
+        accessorKey: "shuffle_start_timestamp",
+        header: "Shuffle Start Timestamp",
+    },
+    {
+        accessorKey: "shuffle_end_timestamp",
+        header: "Shuffle End Timestamp",
     },
     {
         accessorKey: "query_duration_with_queue",
