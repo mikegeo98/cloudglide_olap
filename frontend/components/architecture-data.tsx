@@ -26,17 +26,17 @@ import { Spinner } from "@/components/ui/spinner";
 import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { set, z } from "zod";
 import { createArchitectureSchema, ZodDWAAS, ZodDWAASAutoscaling, ZodElasticPool, ZodQAAS } from "@/lib/zod-schemas";
 import { ArchitectureType, instanceTypes } from "@/lib/config";
 import { ChevronsUpDown, Plus } from "lucide-react";
-import InteractiveCluster from "./interactive-cluster";
 import ClusterView from "./cluster-view";
 
 export default function ArchitectureData() {
     const { data, stage, setStage, setData } = React.useContext(InputContext)
     const [arch, setArch] = React.useState<string>()
     const [add, setAdd] = React.useState(false)
+    const [isCollapsed, setCollapsed] = React.useState<Record<number, boolean>>()
 
     function duplicateArchitecture(scenario: object) {
         setData({
@@ -55,16 +55,16 @@ export default function ArchitectureData() {
                 let form = null
                 switch (scenario.architecture) {
                     case ArchitectureType.DWAAS:
-                        form = <DWAASForm key={index} scenario={scenario} />
+                        form = <DWAASForm key={index} scenario={scenario} setCollapsed={(c: boolean) => setCollapsed(prev => ({ ...prev, [index]: c }))} />
                         break
                     case ArchitectureType.DWAAS_AUTOSCALING:
-                        form = <DWAASAutoscalingForm key={index} scenario={scenario} />
+                        form = <DWAASAutoscalingForm key={index} scenario={scenario} setCollapsed={(c: boolean) => setCollapsed(prev => ({ ...prev, [index]: c }))} />
                         break
                     case ArchitectureType.ELASTIC_POOL:
-                        form = <ElasticPoolForm key={index} scenario={scenario} />
+                        form = <ElasticPoolForm key={index} scenario={scenario} setCollapsed={(c: boolean) => setCollapsed(prev => ({ ...prev, [index]: c }))} />
                         break
                     case ArchitectureType.QAAS:
-                        form = <QAASForm key={index} scenario={scenario} />
+                        form = <QAASForm key={index} scenario={scenario} setCollapsed={(c: boolean) => setCollapsed(prev => ({ ...prev, [index]: c }))} />
                         break
                     default:
                         return null;
@@ -72,7 +72,7 @@ export default function ArchitectureData() {
 
                 return (
                     <div key={index} className="flex w-full gap-3">
-                        <Collapsible className="w-full space-y-6">
+                        <Collapsible open={!isCollapsed?.[index]} onOpenChange={(open) => setCollapsed(prev => ({ ...prev, [index]: !open }))} className="w-full space-y-6">
                             <CollapsibleTrigger asChild>
                                 <div className="flex items-center justify-between gap-3 mb-0 rounded-md">
                                     <h4 className="text-sm font-semibold">
@@ -137,11 +137,11 @@ export default function ArchitectureData() {
     )
 }
 
-function DWAASForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS>> }) {
+function DWAASForm({ scenario, setCollapsed }: { scenario?: z.infer<z.ZodObject<ZodDWAAS>>, setCollapsed?: (c: boolean) => void }) {
     const { stage, setStage, data, setData } = React.useContext(InputContext)
     const formSchema: z.ZodObject<ZodDWAAS> = createArchitectureSchema(ArchitectureType.DWAAS) as z.ZodObject<ZodDWAAS>
-    const [nodes, setNodes] = React.useState<number | undefined>()
-    const [instance, setInstance] = React.useState<number | undefined>()
+    const [nodes, setNodes] = React.useState<number | undefined>(scenario?.nodes)
+    const [instance, setInstance] = React.useState<number | undefined>(scenario?.instance)
     const [loading, setLoading] = React.useState(false)
 
     const form = useForm<z.infer<typeof formSchema>>({
@@ -172,6 +172,7 @@ function DWAASForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS>> }) 
             setTimeout(() => {
                 setLoading(false)
             }, 300)
+            if (setCollapsed) setCollapsed(true)
         } else {
             setData({
                 ...data,
@@ -222,7 +223,7 @@ function DWAASForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS>> }) 
                                     <FormItem>
                                         <FormLabel>Number of Nodes</FormLabel>
                                         <FormControl>
-                                            <Input type="number" defaultValue={field.value ?? ""} onChange={(e) => {
+                                            <Input type="number" defaultValue={field.value} onChange={(e) => {
                                                 field.onChange(Number.parseInt(e.target.value))
                                                 setNodes(Number.parseInt(e.target.value))
                                             }} />
@@ -430,7 +431,7 @@ function DWAASForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS>> }) 
     )
 }
 
-function DWAASAutoscalingForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS>> }) {
+function DWAASAutoscalingForm({ scenario, setCollapsed }: { scenario?: z.infer<z.ZodObject<ZodDWAASAutoscaling>>, setCollapsed?: (c: boolean) => void }) {
     const { stage, setStage, data, setData } = React.useContext(InputContext)
     const formSchema: z.ZodObject<ZodDWAASAutoscaling> = createArchitectureSchema(ArchitectureType.DWAAS_AUTOSCALING) as z.ZodObject<ZodDWAASAutoscaling>
     const [nodes, setNodes] = React.useState<number | undefined>()
@@ -466,6 +467,7 @@ function DWAASAutoscalingForm({ scenario }: { scenario?: z.infer<z.ZodObject<Zod
             setTimeout(() => {
                 setLoading(false)
             }, 300)
+            if (setCollapsed) setCollapsed(true)
         } else {
             setData({
                 ...data,
@@ -759,10 +761,10 @@ function DWAASAutoscalingForm({ scenario }: { scenario?: z.infer<z.ZodObject<Zod
     )
 }
 
-function ElasticPoolForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS>> }) {
+function ElasticPoolForm({ scenario, setCollapsed }: { scenario?: z.infer<z.ZodObject<ZodElasticPool>>, setCollapsed?: (c: boolean) => void }) {
     const { stage, setStage, data, setData } = React.useContext(InputContext)
     const formSchema: z.ZodObject<ZodElasticPool> = createArchitectureSchema(ArchitectureType.ELASTIC_POOL) as z.ZodObject<ZodElasticPool>
-    const [vpu, setVPUs] = React.useState<number | undefined>()
+    const [vpu, setVPUs] = React.useState<number | undefined>(scenario?.vpu)
     const [loading, setLoading] = React.useState(false)
 
     const form = useForm<z.infer<typeof formSchema>>({
@@ -800,6 +802,7 @@ function ElasticPoolForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS
             setTimeout(() => {
                 setLoading(false)
             }, 300)
+            if (setCollapsed) setCollapsed(true)
         } else {
             setData({
                 ...data,
@@ -1022,11 +1025,16 @@ function ElasticPoolForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS
                     </form>
                 </Form>
             </div>
+            {vpu !== undefined
+                ? <div className="flex-1">
+                    <ClusterView nodes={1} vpus={vpu} />
+                </div>
+                : null}
         </div>
     )
 }
 
-function QAASForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS>> }) {
+function QAASForm({ scenario, setCollapsed }: { scenario?: z.infer<z.ZodObject<ZodQAAS>>, setCollapsed?: (c: boolean) => void }) {
     const { stage, setStage, data, setData } = React.useContext(InputContext)
     const formSchema: z.ZodObject<ZodQAAS> = createArchitectureSchema(ArchitectureType.QAAS) as z.ZodObject<ZodQAAS>
     const [loading, setLoading] = React.useState(false)
@@ -1057,6 +1065,7 @@ function QAASForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS>> }) {
             setTimeout(() => {
                 setLoading(false)
             }, 300)
+            if (setCollapsed) setCollapsed(true)
         } else {
             setData({
                 ...data,

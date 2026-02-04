@@ -7,7 +7,10 @@ import { InstanceConfig } from "@/lib/config";
 
 export type ClusterViewProps = {
     nodes: number;
-    instanceType: InstanceConfig;
+    /** Instance configuration (optional - if not provided, vpus will be used) */
+    instanceType?: InstanceConfig;
+    /** Number of VPUs (used when instanceType is not provided) */
+    vpus?: number;
     /** Show the S3 storage box at the bottom (default: true) */
     showS3?: boolean;
     /** Show inter-node mesh links (default: true) */
@@ -74,18 +77,23 @@ function formatNumber(n: number) {
 
 function computeClusterViz(
     nodeCount: number,
-    instanceType: InstanceConfig,
+    instanceType: InstanceConfig | undefined,
+    vpus: number | undefined,
     svgW: number,
     svgH: number
 ): ClusterViz {
     const nodesN = clamp(nodeCount, 1, 256);
 
-    const totalVcpu = nodesN * instanceType.cpu_cores;
-    const totalDramGb = nodesN * instanceType.memory;
-    const totalBandwidthMbps = nodesN * instanceType.network_bandwidth;
+    const cpuCores = instanceType?.cpu_cores ?? vpus ?? 4;
+    const memory = instanceType?.memory ?? 0;
+    const networkBandwidth = instanceType?.network_bandwidth ?? 0;
+
+    const totalVcpu = nodesN * cpuCores;
+    const totalDramGb = nodesN * memory;
+    const totalBandwidthMbps = nodesN * networkBandwidth;
 
     const warnings: string[] = [];
-    if (instanceType.network_bandwidth < 5000) warnings.push("Low network bandwidth per node");
+    if (instanceType && networkBandwidth < 5000) warnings.push("Low network bandwidth per node");
     if (nodesN > 160) warnings.push("High node count: inter-node links are thinned for readability/perf");
 
     // Reserve space for S3 box
@@ -108,8 +116,8 @@ function computeClusterViz(
     const rawH = (availH - (rows - 1) * pad) / rows;
 
     // Node size (big enough to show some vCPU squares + DRAM bar)
-    const nodeW = clamp(rawW, 56, 150);
-    const nodeH = clamp(rawH, 70, 140);
+    const nodeW = clamp(rawW, 156, 250);
+    const nodeH = clamp(rawH, 170, 240);
 
     const gridW = cols * nodeW + (cols - 1) * pad;
     const gridH = rows * nodeH + (rows - 1) * pad;
@@ -145,7 +153,7 @@ function computeClusterViz(
 
     // Bandwidth visual encoding on links (from instance type)
     // network_bandwidth is in Mbps, convert to Gbps for visual encoding
-    const bwGbps = instanceType.network_bandwidth / 1000;
+    const bwGbps = networkBandwidth / 1000;
     const bwStroke = bandwidthToStrokeWidth(bwGbps);
     const bwNorm = clamp(bwGbps / 400, 0, 1);
     const meshStroke = clamp(bwStroke * 0.35, 1, 4);
@@ -154,7 +162,7 @@ function computeClusterViz(
     // Inter-node links
     const links: LinkViz[] = [];
 
-    const bwLabel = `${(instanceType.network_bandwidth / 1000).toFixed(1)} Gbps`;
+    const bwLabel = networkBandwidth > 0 ? `${(networkBandwidth / 1000).toFixed(1)} Gbps` : '';
     const shouldLabel = (edgeIndex: number, nodesCount: number) => {
         if (nodesCount <= 20) return true;
         if (nodesCount <= 64) return edgeIndex % 2 === 0;
@@ -271,6 +279,7 @@ function VcpuSquares({
     h,
     vcpu,
     dramReserve,
+    label = 'vCPU',
 }: {
     x: number;
     y: number;
@@ -278,6 +287,7 @@ function VcpuSquares({
     h: number;
     vcpu: number;
     dramReserve: number;
+    label?: string;
 }) {
     const margin = 10;
     const gap = 8;
@@ -321,7 +331,7 @@ function VcpuSquares({
 
     if (maxFit <= 1) {
         const txt = vcpu >= 1000 ? `+${Math.floor(vcpu / 1000)}k` : `+${vcpu}`;
-        return <g>{makeBox(left, top, "v-sum", vcpu === 1 ? "vCPU" : txt)}</g>;
+        return <g>{makeBox(left, top, "v-sum", vcpu === 1 ? label : txt)}</g>;
     }
 
     const renderCount = vcpu <= maxFit ? vcpu : Math.max(0, maxFit - 1);
@@ -341,7 +351,7 @@ function VcpuSquares({
         const c = i % fitCols;
         const bx = left + offsetX + c * (box + gap);
         const by = top + offsetY + r * (box + gap);
-        boxes.push(makeBox(bx, by, `v-${i}`, "vCPU"));
+        boxes.push(makeBox(bx, by, `v-${i}`, label));
     }
 
     if (remaining > 0) {
@@ -375,8 +385,9 @@ function DramBar({ x, y, w, h, text }: { x: number; y: number; w: number; h: num
 export function ClusterView({
     nodes,
     instanceType,
+    vpus,
     showS3 = true,
-    showLinks = true,
+    showLinks = false,
     className,
 }: ClusterViewProps) {
     // Fixed viewBox dimensions for consistent aspect ratio
@@ -384,12 +395,16 @@ export function ClusterView({
     const viewBoxHeight = 820;
 
     const viz = useMemo(
-        () => computeClusterViz(nodes, instanceType, viewBoxWidth, viewBoxHeight),
-        [nodes, instanceType]
+        () => computeClusterViz(nodes, instanceType, vpus, viewBoxWidth, viewBoxHeight),
+        [nodes, instanceType, vpus]
     );
 
+    // Determine CPU cores from instanceType or vpus
+    const cpuCores = instanceType?.cpu_cores ?? vpus ?? 4;
+    const memory = instanceType?.memory ?? 0;
+
     // vCPU -> subtle fill intensity
-    const coresNorm = clamp((instanceType.cpu_cores - 1) / (256 - 1), 0, 1);
+    const coresNorm = clamp((cpuCores - 1) / (256 - 1), 0, 1);
     const nodeFill = `rgba(80, 130, 220, ${0.08 + coresNorm * 0.25})`;
 
     const nodeLabelFont = (nodeW: number) => clamp(nodeW * 0.18, 15, 22);
@@ -406,7 +421,7 @@ export function ClusterView({
             style={{
                 border: "1px solid rgba(0,0,0,0.12)",
                 borderRadius: 16,
-                overflow: "hidden",
+                overflow: "auto",
             }}
         >
             <svg
@@ -454,24 +469,27 @@ export function ClusterView({
                                 fill={nodeFill}
                             />
 
-                            {/* vCPU squares inside the node */}
+                            {/* vCPU/VPU squares inside the node */}
                             <VcpuSquares
                                 x={n.x}
                                 y={n.y}
                                 w={n.w}
                                 h={n.h}
-                                vcpu={instanceType.cpu_cores}
-                                dramReserve={dramReserve}
+                                vcpu={cpuCores}
+                                dramReserve={memory > 0 ? dramReserve : 0}
+                                label={instanceType ? 'vCPU' : 'VPU'}
                             />
 
-                            {/* DRAM bar */}
-                            <DramBar
-                                x={dramX}
-                                y={dramY}
-                                w={dramW}
-                                h={dramH}
-                                text={`DRAM ${formatNumber(instanceType.memory)} GB`}
-                            />
+                            {/* DRAM bar (only show when instanceType is provided) */}
+                            {memory > 0 && (
+                                <DramBar
+                                    x={dramX}
+                                    y={dramY}
+                                    w={dramW}
+                                    h={dramH}
+                                    text={`DRAM ${formatNumber(memory)} GB`}
+                                />
+                            )}
 
                             {/* Node label */}
                             <text
