@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Simulation } from "@/app/output/columns-sim";
+import { Simulation } from "@/app/output/columns-sim"
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 

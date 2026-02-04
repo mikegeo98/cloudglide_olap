@@ -222,7 +222,7 @@ function DWAASForm({ scenario }: { scenario?: z.infer<z.ZodObject<ZodDWAAS>> }) 
                                     <FormItem>
                                         <FormLabel>Number of Nodes</FormLabel>
                                         <FormControl>
-                                            <Input type="number" defaultValue={field.value} onChange={(e) => {
+                                            <Input type="number" defaultValue={field.value ?? ""} onChange={(e) => {
                                                 field.onChange(Number.parseInt(e.target.value))
                                                 setNodes(Number.parseInt(e.target.value))
                                             }} />

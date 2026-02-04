@@ -1,4 +1,3 @@
-import { InputContext } from "@/components/provider";
 import {
     Card,
     CardAction,
@@ -12,39 +11,57 @@ import { Simulation } from "./columns-sim";
 import React from "react";
 import { DataTable } from "./data-table";
 import { columns, SimRun } from "./columns-select";
-import { CartesianGrid, ComposedChart, Label, Line, Scatter, XAxis, YAxis } from "recharts";
-import { ChartContainer, ChartLegend } from "@/components/ui/chart";
+import { Bar, BarChart, CartesianGrid, ComposedChart, Label, Line, Scatter, XAxis, YAxis } from "recharts";
+import { ChartContainer, ChartLegend, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArrowLeftRight } from "lucide-react";
+import { ButtonGroup } from "@/components/ui/button-group";
 
 export default function MultipleRuns({ data, filenames }: { data: Simulation[][], filenames: string[] }) {
-    const { data: input } = React.useContext(InputContext)
     const [rowSelection, setRowSelection] = React.useState<Record<number, boolean>>({})
     const [tableData, setTableData] = React.useState<SimRun[]>()
     const [latencyCostDots, setLatencyCostDots] = React.useState<{ "avgLatency": number, "cost": number }[]>()
     const [pareto, setPareto] = React.useState<{ "avgLatency": number, "cost": number }[]>()
+    const [latencyBreakdown, setLatencyBreakdown] = React.useState<{ filename: string, io: number, cpu: number, shuffle: number }[]>()
     const [sensitivityData, setSensitivityData] = React.useState<{ [key: string]: string | number | undefined; avgLatency: number; cost: number }[]>()
     const [showLatencyInSens, setShowLatencyInSens] = React.useState(false)
+    const [sweepVariable, setSweepVariable] = React.useState<string>("nodes")
 
     React.useEffect(() => {
-        const srs = filenames.map(f => {
-            const scenario = input.scenarios.find(s => s.name === f.split("_")[0])
-            if (scenario) {
-                return {
-                    filename: f,
-                    architecture: scenario.architecture,
-                    nodes: scenario.nodes,
-                    hit_rate: scenario.hit_rate,
-                    instance: scenario.instance,
-                    scaling_policy: scenario.scaling?.policy,
-                    vpu: scenario.vpu,
-                    cold_start: scenario.cold_start,
-                } as SimRun
-            } else {
-                return { filename: f } as SimRun
+        async function fetchScenariosAndBuildTable() {
+            try {
+                const response = await fetch("/api/scenarios");
+                const customJson = await response.json();
+                
+                const srs = filenames.map(f => {
+                    const scenario = customJson.scenarios?.find((s: { name: string }) => s.name === f.split("_")[0])
+                    if (scenario) {
+                        return {
+                            filename: f,
+                            architecture: scenario.architecture,
+                            nodes: scenario.nodes,
+                            hit_rate: scenario.hit_rate,
+                            instance: scenario.instance,
+                            scaling_policy: scenario.scaling?.policy,
+                            scheduling_policy: scenario.scheduling?.policy,
+                            network_bandwidth: scenario.network_bandwidth,
+                            vpu: scenario.vpu,
+                            cold_start: scenario.cold_start,
+                        } as SimRun
+                    } else {
+                        return { filename: f } as SimRun
+                    }
+                })
+                setTableData(srs)
+            } catch (error) {
+                console.error("Error fetching scenarios:", error);
+                setTableData(filenames.map(f => ({ filename: f } as SimRun)))
             }
-        })
-        setTableData(srs)
-    }, [])
+        }
+        
+        fetchScenariosAndBuildTable();
+    }, [filenames])
 
     React.useEffect(() => {
         if (rowSelection && Object.keys(rowSelection).length > 0) {
@@ -77,7 +94,7 @@ export default function MultipleRuns({ data, filenames }: { data: Simulation[][]
 
             // Check which variables differ across selected runs
             const varyingVariables: { key: keyof SimRun; values: (string | number | undefined)[] }[] = []
-            const keysToCheck: (keyof SimRun)[] = ["nodes", "hit_rate", "vpu", "cold_start"]
+            const keysToCheck: (keyof SimRun)[] = ["nodes", "hit_rate", "vpu", "cold_start", "scaling_policy", "scheduling_policy", "network_bandwidth"]
 
             keysToCheck.forEach(key => {
                 const uniqueValues = [...new Set(selectedTableData.map(sr => sr[key]))]
@@ -88,6 +105,7 @@ export default function MultipleRuns({ data, filenames }: { data: Simulation[][]
 
             // If exactly one variable varies, we can auto-generate sensitivity plot data
             if (varyingVariables.length >= 1) {
+                setSweepVariable(varyingVariables[0].key)
                 const sweepVar = varyingVariables[0].key
                 const sensitivityPlotData = Object.entries(rowSelection)
                     .filter(([_, isSelected]) => isSelected)
@@ -108,16 +126,29 @@ export default function MultipleRuns({ data, filenames }: { data: Simulation[][]
                     .filter((entry): entry is { [key: string]: string | number | undefined; avgLatency: number; cost: number } => entry !== null)
                     .sort((a, b) => Number(a[sweepVar]) - Number(b[sweepVar]))
 
-                const colors = ['#2563eb', '#dc2626', '#16a34a', '#ca8a04', '#9333ea', '#0891b2', '#db2777', '#65a30d']
+                const colors = ['var(--color-chart-1)', 'var(--color-chart-2)', 'var(--color-chart-3)', 'var(--color-chart-4)', 'var(--color-chart-5)', 'var(--color-chart-6)']
                 setSensitivityData(sensitivityPlotData.map((point, index) => ({
                     ...point,
                     name: tableData?.[parseInt(Object.entries(rowSelection).filter(([_, isSelected]) => isSelected)[index][0])]?.filename,
                     color: colors[index % colors.length],
                 })))
             }
+
+            const selectedResourceUsage = Object.entries(rowSelection)
+                .filter(([_, isSelected]) => isSelected)
+                .map(([idx]) => {
+                    const simData = data[parseInt(idx)]
+
+                    const io = parseFloat((simData.reduce((prev, curr) => prev + curr.io, 0) / simData.length).toFixed(4))
+                    const cpu = parseFloat((simData.reduce((prev, curr) => prev + curr.cpu, 0) / simData.length).toFixed(4))
+                    const shuffle = parseFloat((simData.reduce((prev, curr) => prev + curr.shuffle, 0) / simData.length).toFixed(4))
+                    return { filename: filenames[parseInt(idx)], io, cpu, shuffle }
+                })
+            setLatencyBreakdown(selectedResourceUsage)
         } else {
             setLatencyCostDots([])
             setPareto([])
+            setLatencyBreakdown([])
         }
     }, [data, rowSelection])
 
@@ -141,6 +172,7 @@ export default function MultipleRuns({ data, filenames }: { data: Simulation[][]
                                 margin={{
                                     top: 30,
                                     right: 12,
+                                    left: 20,
                                     bottom: 10,
                                 }}
                             >
@@ -154,7 +186,7 @@ export default function MultipleRuns({ data, filenames }: { data: Simulation[][]
                                     tickFormatter={(value: number) => (value).toFixed(2)}
                                     allowDuplicatedCategory={false}
                                     type="number"
-                                    domain={['dataMin', 'dataMax']}
+                                    domain={[0, 'dataMax']}
                                 />
                                 <YAxis
                                     dataKey="cost"
@@ -162,9 +194,13 @@ export default function MultipleRuns({ data, filenames }: { data: Simulation[][]
                                     axisLine={false}
                                     tickLine={false}
                                     type="number"
-                                    domain={['dataMin', 'dataMax']}
-                                    label={<Label position="middle" angle={270} dx={-20}>Cost</Label>}
+                                    domain={[0, 'dataMax']}
+                                    label={<Label position="middle" angle={270} dx={-30}>Cost</Label>}
                                     tickFormatter={(value: number) => (value).toFixed(2)}
+                                />
+                                <ChartTooltip
+                                    cursor={false}
+                                    content={<ChartTooltipContent hideLabel />}
                                 />
                                 {latencyCostDots && latencyCostDots.map((dot, index) => (
                                     <Scatter key={index} isAnimationActive={false} data={[dot]} dataKey="cost" fill="red" shape="wye" />
@@ -187,9 +223,26 @@ export default function MultipleRuns({ data, filenames }: { data: Simulation[][]
                             y-axis: latency (sec) or cost (USD)
                         </CardDescription>
                         <CardAction>
-                            <Button variant="outline" onClick={() => setShowLatencyInSens(!showLatencyInSens)}>
-                                {showLatencyInSens ? "Cost" : "Latency"}
-                            </Button>
+                            <ButtonGroup orientation="vertical">
+                                <Button className="w-full" variant="outline" onClick={() => setShowLatencyInSens(!showLatencyInSens)}>
+                                    <ArrowLeftRight />
+                                    {showLatencyInSens ? "Cost" : "Latency"}
+                                </Button>
+                                <Select value={sweepVariable} onValueChange={(e) => setSweepVariable(e)}>
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectGroup>
+                                            <SelectItem value="nodes">Number of Nodes</SelectItem>
+                                            <SelectItem value="vpu">Number of VPUs</SelectItem>
+                                            <SelectItem value="hit_rate">Hit Rate</SelectItem>
+                                            <SelectItem value="network_bandwidth">Network Bandwidth</SelectItem>
+                                            <SelectItem value="cold_start">Cold Start Delay</SelectItem>
+                                        </SelectGroup>
+                                    </SelectContent>
+                                </Select>
+                            </ButtonGroup>
                         </CardAction>
                     </CardHeader>
                     <CardContent>
@@ -205,12 +258,12 @@ export default function MultipleRuns({ data, filenames }: { data: Simulation[][]
                             >
                                 <CartesianGrid />
                                 <XAxis
-                                    dataKey={"nodes"}
+                                    dataKey={sweepVariable}
                                     tickLine={false}
                                     axisLine={false}
                                     type="number"
                                     domain={[0, 'dataMax']}
-                                    label={<Label position="middle" dy={15}>Number of Nodes</Label>}
+                                    label={<Label position="middle" dy={15}>{sweepVariable}</Label>}
                                 />
                                 {showLatencyInSens ? (
                                     <YAxis
@@ -231,7 +284,7 @@ export default function MultipleRuns({ data, filenames }: { data: Simulation[][]
                                         tickLine={false}
                                         type="number"
                                         domain={[0, 'dataMax']}
-                                        label={<Label position="middle" angle={270} dx={-20}>Cost</Label>}
+                                        label={<Label position="middle" angle={270} dx={-30}>Cost</Label>}
                                         tickFormatter={(value: number) => value.toFixed(2)}
                                     />
                                 )}
@@ -246,6 +299,49 @@ export default function MultipleRuns({ data, filenames }: { data: Simulation[][]
                                     })) : []
                                 } />
                             </ComposedChart>
+                        </ChartContainer>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Component Cost Decomposition</CardTitle>
+                        <CardDescription>
+                            Average resource usage breakdown across selected simulation runs.<br />
+                            Shows the contribution of I/O, CPU, and Shuffle to overall query latency.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ChartContainer config={{}}>
+                            <BarChart
+                                accessibilityLayer
+                                data={latencyBreakdown}
+                                margin={{ top: 20, right: 30, bottom: 5 }}
+                            >
+                                <CartesianGrid vertical={false} />
+                                <XAxis
+                                    dataKey="filename"
+                                    tickLine={false}
+                                    tickMargin={10}
+                                    axisLine={false}
+                                />
+                                <YAxis
+                                    tickLine={false}
+                                    tickMargin={10}
+                                    axisLine={false}
+                                />
+                                <ChartTooltip
+                                    cursor={false}
+                                    content={<ChartTooltipContent hideLabel />}
+                                />
+                                <Bar dataKey="io" stackId="a" fill="var(--color-chart-1)" />
+                                <Bar dataKey="cpu" stackId="a" fill="var(--color-chart-2)" />
+                                <Bar dataKey="shuffle" stackId="a" fill="var(--color-chart-3)" />
+                                <ChartLegend payload={[
+                                    { value: "I/O", type: "square", color: "var(--color-chart-1)" },
+                                    { value: "CPU", type: "square", color: "var(--color-chart-2)" },
+                                    { value: "Shuffle", type: "square", color: "var(--color-chart-3)" },
+                                ]} />
+                            </BarChart>
                         </ChartContainer>
                     </CardContent>
                 </Card>
