@@ -419,9 +419,11 @@ export function ClusterView({
         <div
             className={`w-full ${className || ""}`}
             style={{
-                border: "1px solid rgba(0,0,0,0.12)",
-                borderRadius: 16,
-                overflow: "auto",
+            border: "1px solid rgba(0,0,0,0.12)",
+            borderRadius: 16,
+            overflow: "auto",
+            background: "#f0f0f0",
+            boxShadow: "inset 0 0 10px rgba(0,0,0,0.08)",
             }}
         >
             <svg

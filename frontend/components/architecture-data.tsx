@@ -26,7 +26,7 @@ import { Spinner } from "@/components/ui/spinner";
 import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { set, z } from "zod";
+import { z } from "zod";
 import { createArchitectureSchema, ZodDWAAS, ZodDWAASAutoscaling, ZodElasticPool, ZodQAAS } from "@/lib/zod-schemas";
 import { ArchitectureType, instanceTypes } from "@/lib/config";
 import { ChevronsUpDown, Plus } from "lucide-react";
@@ -74,17 +74,14 @@ export default function ArchitectureData() {
                     <div key={index} className="flex w-full gap-3">
                         <Collapsible open={!isCollapsed?.[index]} onOpenChange={(open) => setCollapsed(prev => ({ ...prev, [index]: !open }))} className="w-full space-y-6">
                             <CollapsibleTrigger asChild>
-                                <div className="flex items-center justify-between gap-3 mb-0 rounded-md">
+                                <Button className="bg-gray-100 w-full text-black hover:bg-gray-200 flex items-center justify-between gap-3 mb-0 rounded-md">
                                     <h4 className="text-sm font-semibold">
                                         {`Scenario ${index + 1}: ${scenario.architecture}`}
                                     </h4>
-                                    <Button variant="ghost" size="icon" className="size-8">
-                                        <ChevronsUpDown />
-                                        <span className="sr-only">Toggle</span>
-                                    </Button>
-                                </div>
+                                    <ChevronsUpDown />
+                                </Button>
                             </CollapsibleTrigger>
-                            <CollapsibleContent className="mt-3 space-y-3">
+                            <CollapsibleContent className="mt-3 space-y-3 px-10">
                                 {form}
                             </CollapsibleContent>
                         </Collapsible>
@@ -1103,6 +1100,9 @@ function QAASForm({ scenario, setCollapsed }: { scenario?: z.infer<z.ZodObject<Z
                         ) : <NextButton />}
                     </form>
                 </Form>
+            </div>
+            <div className="flex-1">
+                <ClusterView nodes={1} vpus={4} instanceType={instanceTypes[0]} />
             </div>
         </div>
     )
