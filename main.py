@@ -220,22 +220,34 @@ def build_runs_for_scenario(
         run_config = scenario_config.copy()
 
         run_sched_payload = run_payload.get("scheduling")
-        run_sched_policy = map_scheduling_policy(
-            run_sched_payload.get("policy") if run_sched_payload else None,
-            scenario_sched_policy,
-        )
-        run_sched_options = extract_option_payload(run_sched_payload or {})
-        if run_sched_options:
-            run_config.apply_overrides({"scheduling": run_sched_options})
+        if isinstance(run_sched_payload, dict):
+            run_sched_policy = map_scheduling_policy(
+                run_sched_payload.get("policy"),
+                scenario_sched_policy,
+            )
+            run_sched_options = extract_option_payload(run_sched_payload)
+            if run_sched_options:
+                run_config.apply_overrides({"scheduling": run_sched_options})
+        else:
+            run_sched_policy = map_scheduling_policy(
+                run_sched_payload,
+                scenario_sched_policy,
+            )
 
         run_scaling_payload = run_payload.get("scaling")
-        run_scaling_policy = map_scaling_policy(
-            run_scaling_payload.get("policy") if run_scaling_payload else None,
-            scenario_scaling_policy,
-        )
-        run_scaling_options = extract_option_payload(run_scaling_payload or {})
-        if run_scaling_options:
-            run_config.apply_overrides({"scaling": run_scaling_options})
+        if isinstance(run_scaling_payload, dict):
+            run_scaling_policy = map_scaling_policy(
+                run_scaling_payload.get("policy"),
+                scenario_scaling_policy,
+            )
+            run_scaling_options = extract_option_payload(run_scaling_payload)
+            if run_scaling_options:
+                run_config.apply_overrides({"scaling": run_scaling_options})
+        else:
+            run_scaling_policy = map_scaling_policy(
+                run_scaling_payload,
+                scenario_scaling_policy,
+            )
 
         run_config.apply_overrides(run_payload.get("config_overrides", {}))
         if "use_spot_instances" in run_payload or "spot" in run_payload:
@@ -343,7 +355,7 @@ def parse_arguments() -> Tuple[str, str, str, bool, str]:
 def compare_results(simulation_time: float, expected_time: float, tolerance: float = 0.05) -> bool:
     """
     Compare simulation execution time with expected execution time within a tolerance.
-    
+
     Returns True if within tolerance, else False.
     """
     lower_bound = expected_time * (1 - tolerance)
@@ -442,20 +454,20 @@ def main():
             )
             if match_idx is not None:
                 simulation_time = results[match_idx][0]
-                expected_time = expected.get("expected_execution_time")             
+                expected_time = expected.get("expected_execution_time")
                 # Extract additional expected metrics
                 simulation_median = results[match_idx][3]
-                expected_median = expected.get("expected_median")            
+                expected_median = expected.get("expected_median")
                 simulation_95 = results[match_idx][4]
-                expected_95th = expected.get("expected_95th")            
+                expected_95th = expected.get("expected_95th")
                 simulation_cost = results[match_idx][2]
-                expected_cost = expected.get("expected_cost")            
+                expected_cost = expected.get("expected_cost")
                 # Compare each metric if available
                 within_time = compare_results(simulation_time, expected_time) if simulation_time and expected_time else False
                 within_median = compare_results(simulation_median, expected_median) if simulation_median and expected_median else False
                 within_95th = compare_results(simulation_95, expected_95th) if simulation_95 and expected_95th else False
-                within_cost = compare_results(simulation_cost, expected_cost) if simulation_cost and expected_cost else False             
-                overall_within = within_time and within_median and within_95th and within_cost           
+                within_cost = compare_results(simulation_cost, expected_cost) if simulation_cost and expected_cost else False
+                overall_within = within_time and within_median and within_95th and within_cost
                 comparisons[key] = {
                     "simulation_time": simulation_time,
                     "expected_time": expected_time,
@@ -495,7 +507,7 @@ def main():
                 f"95th Perc = {comp['perc95_sim_time']} (Expected = {comp['expected_95th']}), "
                 f"Avg Cost = {comp['avg_cost']} (Expected = {comp['expected_cost']}), "
                 f"Within tolerance = {comp['within_tolerance']}\033[0m")
-            
+
 
         def load_simulation_results(simulation_csv_path: str) -> dict:
             """

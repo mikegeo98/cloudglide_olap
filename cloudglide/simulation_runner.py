@@ -234,13 +234,13 @@ def run_simulation(
 
         proc = psutil.Process(os.getpid())
         before = proc.memory_info().rss
-        
+
         arch_enum = ArchitectureType(arch) if not isinstance(run.architecture, ArchitectureType) else run.architecture
-        
+
         scales, mems, lat, lat_queue, money, med, ninetyfive = schedule_jobs(
             arch_enum, exec_params, sim_params, output_file_path, config
         )
-        
+
         after  = proc.memory_info().rss
         print(f"RSS before: {before/1024**2:.1f} MiB")
         print(f"RSS after:  {after/1024**2:.1f} MiB")

@@ -45,7 +45,7 @@ class Job:
     next_shuffle_done: float | None = field(init=False, default=None)
     next_cpu_done:     float | None = field(init=False, default=None)
     dram_node_index: Optional[int] = field(init=False, default=None)
-    
+
     # per-estimator outputs
     estimators: Dict[str, float] = field(default_factory=dict)
     selected_estimator: str = ""

@@ -26,7 +26,7 @@ def get_latency_data_from_files(output_files):
     for file in output_files:
         # Read the CSV file into a DataFrame
         df = pd.read_csv(file)
-        
+
         # Calculate the average query duration and query duration with queueing
         avg_query_exec_time = df['query_duration'].mean()
         avg_query_exec_time_queueing = df['query_duration_with_queue'].mean()
@@ -50,7 +50,7 @@ def get_io_latency_data_from_files(output_files):
     for file in output_files:
         # Read the CSV file into a DataFrame
         df = pd.read_csv(file)
-        
+
         # Calculate the average query duration and query duration with queueing
         avg_query_exec_time = df["io"].mean()
         avg_query_exec_time_queueing = df['query_duration_with_queue'].mean()
@@ -70,14 +70,14 @@ def get_io_latency_data_from_files(output_files):
 # Function to plot scheduling data
 def process_and_plot_scheduling(output_files, title):
     algorithms = ['FCFS', 'SJF', 'LJF', 'MLQ']
-    
+
     # Get latency data
     data1 = get_latency_data_from_files(output_files)
 
     # Extract the latencies, latencies with queueing, and costs (CPU times)
     latencies = [entry[0] for entry in data1]
     latencies_q = [entry[1] for entry in data1]
-    
+
     # Bar width
     bar_width = 0.35
 
@@ -124,13 +124,13 @@ def process_and_plot_scheduling(output_files, title):
 
 # Function to process input files and return the data for plotting
 def process_and_plot_queueing(output_files):
-    
+
     # List of algorithms
     algorithms = ['FCFS', 'MLQ-12', 'SJF']  # Adjusted to 3 algorithms for your use case
 
     # Get latency data
     data1 = get_latency_data_from_files(output_files)
-    
+
     # For data5: Calculate the maximum query duration grouped by database_id for each file
     data5 = []
     for file in output_files:
@@ -185,12 +185,12 @@ def process_and_plot_queueing(output_files):
 
     # Show the plot
     plt.show()
-    
+
 # Function to process input files and return the data for plotting
 def process_and_plot_scaling_options(output_files):
 
     results = get_latency_data_from_files(output_files)
-    
+
     # Extract latencies and costs from the data
     latencies1 = [entry[0] for entry in results[0:3]]
     costs1 = [entry[2] for entry in results[0:3]]
@@ -257,10 +257,10 @@ def process_and_plot_scaling_options(output_files):
 
 
 # Function to process input files and return the data for plotting
-def process_and_plot_scaling_algorithms(output_files):   
- 
+def process_and_plot_scaling_algorithms(output_files):
+
     results = get_latency_data_from_files(output_files)
- 
+
     latencies = [entry[1] for entry in results]
     costs = [entry[2] for entry in results]
 
@@ -317,9 +317,9 @@ def process_and_plot_scaling_algorithms(output_files):
     # plt.show()
     print(f"Plot saved as cloudglide/output_visual/scaling_algorithms.png")
 
-    
+
 def process_and_plot_cold_starts(output_files):
-    
+
     results = get_latency_data_from_files(output_files)
 
     # Extract latencies and costs from the data
@@ -406,12 +406,12 @@ def process_and_plot_cold_starts(output_files):
 
     # Show plot
     plt.tight_layout()
-    
+
     plt.savefig('cloudglide/output_visual/cold_starts.png', dpi=300)
     # plt.show()
     print(f"Plot saved as cloudglide/output_visual/cold_starts.png")
 
-    
+
 def process_and_plot_caching(output_files):
     # Extract latencies and costs from the data
     result = get_io_latency_data_from_files(output_files)
@@ -438,7 +438,7 @@ def process_and_plot_caching(output_files):
 
     # Add labels for each point with a white background and better alignment
     for latency, cost, label in zip(latencies1, costs1, labels1):
-        plt.text(latency + 0.3, cost + 0.3, label, fontsize=12, ha='center', va='bottom', color='red', 
+        plt.text(latency + 0.3, cost + 0.3, label, fontsize=12, ha='center', va='bottom', color='red',
                 bbox=dict(facecolor='white', alpha=0.6, edgecolor='none', pad=3))
 
     # Add labels and title with appropriate font sizes
@@ -468,11 +468,11 @@ def process_and_plot_caching(output_files):
 
     # Display the plot
     plt.show()
-    
+
 def process_and_plot_workload_pattern_1(output_files):
 
     result = get_latency_data_from_files(output_files)
-    
+
     # Extract latencies and costs from the data
     latencies1 = [entry[0] for entry in result[0:4]]
     costs1 = [entry[2] for entry in result[0:4]]
@@ -486,7 +486,7 @@ def process_and_plot_workload_pattern_1(output_files):
     qaas = result[11]
     latencies4 = [qaas[0]]
     costs4 = [qaas[2]]
-    
+
     # Labels for the points (adjust as needed)
     labels1 = ['N=2', 'N=3', 'N=4', 'N=8']
     labels2 = ['N=2', 'N=3', 'N=4', 'N=8']
@@ -553,7 +553,7 @@ def process_and_plot_workload_pattern_1(output_files):
     plt.savefig('cloudglide/output_visual/pattern1.png', dpi=300)
     print(f"Plot saved as cloudglide/output_visual/pattern1.png")
 
-      
+
 def process_and_plot_workload_pattern_2(output_files):
 
     result = get_latency_data_from_files(output_files)
@@ -571,13 +571,13 @@ def process_and_plot_workload_pattern_2(output_files):
     qaas = result[14]
     latencies4 = [qaas[0]]
     costs4 = [qaas[2]]
-    
+
     # Labels for the points (adjust as needed)
     labels1 = ['N=8', 'N=16', 'N=24', 'N=32']
     labels2 = ['N=8', 'N=16', 'N=24', 'N=32']
     labels3 = ['VPU=6','VPU=16', 'VPU=24','VPU=32', 'VPU=48', 'VPU=64']
     labels4 = ['QaaS']
-    
+
     fig, ax = plt.subplots(figsize=(7,4))
 
     # Plot each data set with line+markers
@@ -621,7 +621,7 @@ def process_and_plot_workload_pattern_2(output_files):
     plt.savefig('cloudglide/output_visual/pattern2.png', dpi=300)
     print(f"Plot saved as cloudglide/output_visual/pattern2.png")
 
-    
+
 def process_and_plot_workload_pattern_3(output_files):
 
     result = get_latency_data_from_files(output_files)
@@ -639,13 +639,13 @@ def process_and_plot_workload_pattern_3(output_files):
     qaas = result[14]
     latencies4 = [qaas[0]]
     costs4 = [qaas[2]]
-    
+
     # Labels for the points (adjust as needed)
     labels1 = ['N=4', 'N=8', 'N=12', 'N=16']
     labels2 = ['N=4', 'N=8', 'N=12', 'N=16']
     labels3 = ['VPU=6','VPU=16', 'VPU=24','VPU=32', 'VPU=48', 'VPU=64']
     labels4 = ['QaaS']
-    
+
     fig, ax = plt.subplots(figsize=(7,4))
 
     ax.plot(latencies1, costs1, color='red',   marker='o', markersize=12, linewidth=2,
@@ -687,7 +687,7 @@ def process_and_plot_workload_pattern_3(output_files):
     plt.savefig('cloudglide/output_visual/pattern3.png', dpi=300)
     print(f"Plot saved as cloudglide/output_visual/pattern3.png")
 
-    
+
 def process_and_plot_workload_pattern_4(output_files):
 
     result = get_latency_data_from_files(output_files)
@@ -705,13 +705,13 @@ def process_and_plot_workload_pattern_4(output_files):
     qaas = result[11]
     latencies4 = [qaas[0]]
     costs4 = [qaas[2]]
-    
+
     # Labels for the points (adjust as needed)
     labels1 = ['N=2', 'N=3', 'N=4', 'N=8']
     labels2 = ['N=2', 'N=3', 'N=4', 'N=8']
     labels3 = ['VPU=6', 'VPU=12', 'VPU=24']
     labels4 = ['QaaS']
-    
+
     fig, ax = plt.subplots(figsize=(7,4))
 
     ax.plot(latencies1, costs1,
@@ -762,9 +762,9 @@ def process_and_plot_workload_pattern_4(output_files):
     plt.savefig('cloudglide/output_visual/pattern4.png', dpi=300)
     print(f"Plot saved as cloudglide/output_visual/pattern4.png")
 
-    
+
 def process_and_plot_workload_pattern_5(output_files):
-    
+
     result = get_latency_data_from_files(output_files)
 
     # Extract latencies and costs from the data
@@ -780,7 +780,7 @@ def process_and_plot_workload_pattern_5(output_files):
     qaas = result[12]
     latencies4 = [qaas[0]]
     costs4 = [qaas[2]]
-    
+
     # Labels for the points (adjust as needed)
     labels1 = ['N=2', 'N=3', 'N=4', 'N=8']
     labels2 = ['N=2', '', 'N=4', 'N=8']
@@ -921,7 +921,7 @@ def tpch_results():
             if col not in df_sim.columns:
                 raise ValueError(f"Column {col} not found in {fname}.")
         df_sim["query_id"] = pd.to_numeric(df_sim["query_id"], errors="coerce")
-        
+
         # If scale_factor not in the CSV, assign it via group
         if "scale_factor" not in df_sim.columns:
             def assign_scale(group):
@@ -952,20 +952,20 @@ def tpch_results():
 
     for q in queries:
         plt.figure(figsize=(8,6))
-        
+
         for config in config_colors.keys():
             sub_exp = df_exp_long[
                 (df_exp_long["query_id"] == q)
                 & (df_exp_long["config"] == config)
                 & (df_exp_long["scale_factor"].isin(plot_scales))
             ].sort_values(by="scale_factor")
-            
+
             sub_sim = df_sim_all[
                 (df_sim_all["query_id"] == q)
                 & (df_sim_all["config"] == config)
                 & (df_sim_all["scale_factor"].isin(plot_scales))
             ].sort_values(by="scale_factor")
-            
+
             plt.plot(
                 sub_exp["scale_factor"], sub_exp["exp_duration"],
                 marker="o", linestyle="-", color=config_colors[config],
@@ -976,18 +976,18 @@ def tpch_results():
                 marker="s", linestyle="--", color=config_colors[config],
                 label=f"{config} Sim" if q == queries[0] else None
             )
-            
+
             if not sub_exp.empty and not sub_sim.empty:
                 exp_vals = sub_exp["exp_duration"].values
                 sim_vals = sub_sim["query_duration"].values
                 sc_vals = sub_exp["scale_factor"].values
-                
+
                 errors = sim_vals - exp_vals
                 mae = np.mean(np.abs(errors))
                 rmse = np.sqrt(np.mean(errors**2))
                 rel_errors = np.abs(errors) / exp_vals
                 mre = np.mean(rel_errors)
-                
+
                 stats_results.append({
                     "query_id": q,
                     "config": config,
@@ -997,13 +997,13 @@ def tpch_results():
                     "MRE": mre
                 })
                 mre_list.append({"query_id": q, "config": config, "MRE": mre})
-                
+
                 # finer row-by-row
                 for i in range(len(sc_vals)):
                     e = exp_vals[i]
                     s = sim_vals[i]
                     sc = sc_vals[i]
-                    
+
                     err = s - e
                     mae_ = abs(err)
                     rmse_ = abs(err)  # single point
@@ -1013,7 +1013,7 @@ def tpch_results():
                     else:
                         qerr_ = np.inf
                     sre_ = (err/e) if e !=0 else np.inf
-                    
+
                     fine_results.append({
                         "query_id": q,
                         "config": config,
@@ -1156,8 +1156,8 @@ def tpch_results():
                 print(worst_under.to_string(index=False))
 
     print("Done.")
-    
-    
+
+
 def plot_concurrency(output_file):
     """
     Plots concurrency vs. execution time using hard-coded 'measured' data,
@@ -1165,33 +1165,33 @@ def plot_concurrency(output_file):
     """
     # Set up Seaborn for a polished look with larger fonts
     sns.set_theme(style='whitegrid', context='paper', font_scale=3)
-    
+
     # Concurrency from 1 to 10
     concurrency_levels = np.arange(1, 9)
-    
+
     # Rows in your CSV to extract
     row_indices = [0, 2, 3, 5, 8, 14, 19, 24]
-    
+
     # Read the CSV file
     df = pd.read_csv(output_file)
-    
+
     # Extract the 'query_duration_with_queue' column from these row indices
     ideal_linear = df.loc[row_indices, 'query_duration_with_queue'].values
-    
+
     # Measured times for Q1 SF=10 (kept as a hard-coded example)
     measured = np.array([3.1, 5.6, 8.4, 11.2, 13.5, 17.1, 19.2, 23])
-    
+
     # Create figure with dimensions 8x4 inches
     fig, ax = plt.subplots(figsize=(8, 4))
 
     # Plot "ideal_linear" (from CSV)
-    ax.plot(concurrency_levels, ideal_linear, 
-            marker='o', markersize=12, linestyle='--', linewidth=3.0, 
+    ax.plot(concurrency_levels, ideal_linear,
+            marker='o', markersize=12, linestyle='--', linewidth=3.0,
             color='magenta', label='CloudGlide')
 
     # Plot Measured (remains hard-coded)
-    ax.plot(concurrency_levels, measured, 
-            marker='s', markersize=10, linestyle='-', linewidth=3.0, 
+    ax.plot(concurrency_levels, measured,
+            marker='s', markersize=10, linestyle='-', linewidth=3.0,
             color='black', label='Measured')
 
     # Configure axes

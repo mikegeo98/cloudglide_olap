@@ -79,7 +79,7 @@ class Autoscaler:
                     nodes = nodes - 1
                     cpu_cores = nodes * cpu_cores_per_node
                     memory = 32 * nodes * 1024
-                    io_bandwidth = nodes * 650 
+                    io_bandwidth = nodes * 650
                 self.scaling_out_flag = False
                 self.scaling_in_flag = False
                 self.scaling_counter = 0
@@ -95,7 +95,7 @@ class Autoscaler:
                     scale_out_amount = min(max(4, self.pending_scale_out), 16)  # Dynamic scaling out amount
                     # print(f"Scaling out to {vpu + scale_out_amount} vpus")
                     vpu += scale_out_amount
-                    cpu_cores = vpu  
+                    cpu_cores = vpu
                 if self.scaling_in_flag:
                     scale_in_amount = min(max(4, self.pending_scale_in), vpu - base_cores)  # Dynamic scaling in amount
                     # print(f"Scaling in to {vpu - scale_in_amount} vpus")

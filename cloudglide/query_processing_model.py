@@ -41,7 +41,7 @@ def assign_memory_tier(hit_rate, architecture, n, warmup_rate):
     if architecture == ArchitectureType.ELASTIC_POOL:
         # Exponential convergence toward steady-state hit_rate
         P_DRAM = hit_rate * (1 - math.exp(-warmup_rate * n))
-        P_DRAM = max(0.0, min(1.0, P_DRAM)) 
+        P_DRAM = max(0.0, min(1.0, P_DRAM))
 
     remaining = 1 - P_DRAM
     P_SSD = remaining * 0.67
@@ -73,7 +73,7 @@ def update_dram_nodes(
 ) -> Tuple[List[List[Job]], List[int]]:
     """
     Updates dram_nodes and dram_job_counts to match the number of nodes, redistributing jobs if needed.
-    
+
     """
     current_num_nodes = len(dram_nodes)
 
@@ -203,7 +203,7 @@ def simulate_io(
                 dram_nodes[idx].append(job)
                 dram_job_counts[idx] += 1
         new_jobs.append((job, job_memory_tiers[jid]))
-        
+
 
     # ----------------------------
     # Phase 2: Bandwidth Allocation and Processing
@@ -260,7 +260,7 @@ def simulate_io(
             io_jobs.remove(job)
             if job not in buffer_jobs and job not in cpu_jobs:
                 finished_jobs.append(job)
-                
+
 
 def assign_cores_to_jobs(cpu_jobs: List[Job], shuffle, num_cores: int, current_second, time_limit) -> List[int]:
     """
@@ -386,7 +386,7 @@ def simulate_cpu(
     Returns:
         int: Total cores allocated (Elastic Pool only).
     """
-    
+
     if phase not in ("arrival","cpu_done","shuffle_done","scale_check"):
         return 0
 
@@ -397,10 +397,10 @@ def simulate_cpu(
     if architecture in [ArchitectureType.QAAS, ArchitectureType.QAAS_CAPACITY]:
         return simulate_cpu_qaas(current_second, cpu_jobs, network_bandwidth,
                 finished_jobs, shuffle_jobs, waiting_jobs, io_jobs, {}, memory, second_range, events, config)
-    
+
     # Determine per-node core threshold
     per_node = cpu_cores_per_node
-    
+
     # Assign cores to jobs
     num_jobs = len((cpu_jobs))
     if num_jobs == 0:
@@ -504,7 +504,7 @@ def simulate_cpu(
                     current_second,
                     config,
                 )
-    
+
     for job in to_remove:
         cpu_jobs.remove(job)
     return sum(core_allocation) if architecture == ArchitectureType.ELASTIC_POOL else 0
@@ -675,7 +675,7 @@ def simulate_cpu_qaas(
     """
     if not cpu_jobs:
         return 0
-    
+
     # 1) assign cores
     core_allocation = assign_cores_to_jobs_qaas(cpu_jobs, config.qaas_base_time_limit)
 
@@ -752,7 +752,7 @@ def simulate_cpu_qaas(
                 if job.cpu_end_timestamp == 0.0:
                     job.cpu_end_timestamp = current_second
                 to_remove.append(job)
-    
+
                 job_finalization(
                     job,
                     memory,
@@ -766,5 +766,5 @@ def simulate_cpu_qaas(
                 )
     for job in to_remove:
         cpu_jobs.remove(job)
-                
+
     return sum(core_allocation)
