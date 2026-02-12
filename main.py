@@ -138,6 +138,10 @@ def build_base_config(defaults: Dict) -> Tuple[SimulationConfig, int, int]:
     if qaas_overrides:
         config.apply_overrides(qaas_overrides)
 
+    faas_overrides = defaults.get("faas", {})
+    if faas_overrides:
+        config.apply_overrides(faas_overrides)
+
     # Apply scheduling defaults
     sched_defaults = defaults.get("scheduling", {}) or {}
     sched_options = extract_option_payload(sched_defaults)
@@ -276,8 +280,18 @@ def build_runs_for_scenario(
         # Apply architecture-specific defaults
         arch_value = architecture.value if isinstance(architecture, ArchitectureType) else architecture
 
+        # FaaS (architecture 6): purely serverless, no infrastructure
+        if arch_value == 6:
+            nodes = 0
+            vpu = 0
+            hit_rate = 0.0
+            cold_start = 0.0
+            io_bandwidth = 0
+            memory_bandwidth = 0
+            instance = 0
+            network_bandwidth = resolve_value(run_payload, scenario_payload, "network_bandwidth", 10)
         # QaaS (architecture 3+): Force infrastructure params to 0, ignore user input
-        if arch_value >= 3:
+        elif arch_value >= 3:
             nodes = 0
             vpu = 0
             hit_rate = 0.0

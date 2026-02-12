@@ -130,6 +130,34 @@ def configure_execution_params(
             hit_rate=hit_rate
         )
 
+    # FaaS (architecture 6): purely serverless, no infrastructure
+    elif architecture == 6:
+        max_jobs = 100000
+        cpu_cores = 0
+        memory = 0
+        io_bw = 0
+        vpu_param = 0
+        network_bw = network_bandwidth * 1000
+        memory_bw = 50000
+        nodes_internal = 0
+        hit_rate_internal = 0.0
+        cold_start_internal = 0.0
+
+        return ExecutionParams(
+            scheduling=scheduling,
+            scaling=scaling,
+            nodes=nodes_internal,
+            cpu_cores=cpu_cores,
+            io_bw=io_bw,
+            max_jobs=max_jobs,
+            vpu=vpu_param,
+            network_bw=network_bw,
+            memory_bw=memory_bw,
+            total_memory_capacity_mb=memory,
+            cold_start=cold_start_internal,
+            hit_rate=hit_rate_internal
+        )
+
     # QaaS (architecture 3+)
     else:
         max_jobs = 100000

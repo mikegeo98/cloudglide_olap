@@ -48,6 +48,43 @@ def redshift_persecond_cost(vcores: float) -> float:
     return (vcores * 0.00030166666) / 4
 
 
+def faas_cost(
+    num_invocations: int,
+    total_gb_seconds: float,
+    cost_per_invocation: float,
+    cost_per_gb_second: float,
+) -> float:
+    """
+    Calculate total FaaS cost using the hybrid pricing model.
+
+    FaaS pricing has two components:
+    1. Per-invocation fee: Fixed cost per function invocation
+       (e.g., $0.20 per 1M requests on AWS Lambda)
+    2. Duration-based fee: Cost per GB-second of compute time
+       (e.g., $0.0000166667 per GB-second on AWS Lambda)
+
+    Implementation requirements:
+    ----------
+    Compute and return the total cost as:
+        invocation_cost = num_invocations * cost_per_invocation
+        duration_cost   = total_gb_seconds * cost_per_gb_second
+        total_cost      = invocation_cost + duration_cost
+
+    Args:
+        num_invocations: Total number of function invocations (= finished jobs)
+        total_gb_seconds: Total GB-seconds of compute consumed
+        cost_per_invocation: Cost per single invocation
+        cost_per_gb_second: Cost per GB-second
+
+    Returns:
+        Total cost in USD.
+    """
+    raise NotImplementedError(
+        "TODO: Implement FaaS hybrid cost calculation. "
+        "See docstring above for the formula."
+    )
+
+
 def qaas_total_cost(total_data_scanned_megabytes: float) -> float:
 
     terabytes_scanned = total_data_scanned_megabytes / (1024 * 1024)  # Convert bytes → TB

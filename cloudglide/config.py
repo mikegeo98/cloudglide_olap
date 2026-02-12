@@ -17,6 +17,7 @@ class ArchitectureType(Enum):
     QAAS = 3                 # Query-as-a-Service (pay-per-query)
     QAAS_CAPACITY = 4        # QaaS with reserved capacity pricing
     SERVERLESS = 5           # Serverless (slot-based or ephemeral)
+    FAAS = 6                 # Function-as-a-Service (per-invocation + GB-seconds)
 
 
 
@@ -151,6 +152,13 @@ class SimulationConfig:
     core_alloc_window: float = 10.0
     s3_bandwidth: int = 1000
 
+    # FaaS (Function-as-a-Service) Parameters
+    faas_cost_per_invocation: float = 0.0000002       # $0.20 per 1M requests
+    faas_cost_per_gb_second: float = 0.0000166667     # per GB-second of compute
+    faas_memory_mb: int = 1024                         # default function memory (MB)
+    faas_max_duration: int = 900                       # max function duration (seconds)
+    faas_concurrency_limit: int = 1000                 # max concurrent executions
+
     # QaaS Slot Management Parameters (Scenario 2)
     qaas_strict_priority: bool = False           # Enable preemptive scheduling (short jobs preempt long)
     qaas_fixed_ratio: float = 0.0                # Reserved slot percentage for short jobs (0.0 = disabled)
@@ -225,6 +233,26 @@ class SimulationConfig:
         if self.qaas_baseline_slots < 1:
             errors.append(
                 f"qaas_baseline_slots must be positive, got {self.qaas_baseline_slots}"
+            )
+        if self.faas_cost_per_invocation < 0:
+            errors.append(
+                f"faas_cost_per_invocation must be non-negative, got {self.faas_cost_per_invocation}"
+            )
+        if self.faas_cost_per_gb_second < 0:
+            errors.append(
+                f"faas_cost_per_gb_second must be non-negative, got {self.faas_cost_per_gb_second}"
+            )
+        if self.faas_memory_mb < 1:
+            errors.append(
+                f"faas_memory_mb must be positive, got {self.faas_memory_mb}"
+            )
+        if self.faas_max_duration < 1:
+            errors.append(
+                f"faas_max_duration must be positive, got {self.faas_max_duration}"
+            )
+        if self.faas_concurrency_limit < 1:
+            errors.append(
+                f"faas_concurrency_limit must be positive, got {self.faas_concurrency_limit}"
             )
 
         # Validate scale factor range

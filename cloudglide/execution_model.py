@@ -12,6 +12,7 @@ from cloudglide.cost_model import (
     cost_calculator,
     redshift_persecond_cost,
     qaas_total_cost,
+    faas_cost,
 )
 from cloudglide.scaling_model import Autoscaler
 from cloudglide.scheduling_model import io_scheduler, cpu_scheduler
@@ -83,6 +84,7 @@ def initialize_state(
         "dram_nodes": [[] for _ in range(nodes)],
         "dram_job_counts": [0] * nodes,
         "job_memory_tiers": {},
+        "faas_gb_seconds": [0.0],
     }
 
     # Initial cost model
@@ -154,7 +156,8 @@ def charge_costs(
     # QaaS handled separately
     if architecture not in [
         ArchitectureType.QAAS,
-        ArchitectureType.QAAS_CAPACITY
+        ArchitectureType.QAAS_CAPACITY,
+        ArchitectureType.FAAS,
     ]:
         result = cost_calculator(
             dt, architecture, state["accumulated_cost_usd"], nodes,
@@ -380,7 +383,8 @@ def schedule_jobs(
         slots = simulate_cpu(current_second, state["cpu_jobs"], phase, cpu_cores,
                              cpu_cores_per_node, network_bw, state["finished_jobs"],
                              state["shuffled_jobs"], state["io_jobs"], state["waiting_jobs"],
-                             {}, state["memory"], dt, events, architecture, config)
+                             {}, state["memory"], dt, events, architecture, config,
+                             faas_gb_seconds=state.get("faas_gb_seconds"))
 
         # Interrupts
         maybe_interrupt(state, jobs, current_second, spot, config)
@@ -399,6 +403,13 @@ def schedule_jobs(
         total_price = (
             state["accumulated_slot_hours"] / 3600 * config.cost_per_slot_hour
             if capacity_pricing else qaas_total_cost(workload_data_scanned_mb)
+        )
+    elif architecture == ArchitectureType.FAAS:
+        total_price = faas_cost(
+            len(state["finished_jobs"]),
+            state["faas_gb_seconds"][0],
+            config.faas_cost_per_invocation,
+            config.faas_cost_per_gb_second,
         )
     else:
         total_price = 0.0

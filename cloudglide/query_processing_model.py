@@ -142,6 +142,16 @@ def simulate_io(
 
 
     # ----------------------------
+    # Case: FaaS
+    # ----------------------------
+    if architecture == ArchitectureType.FAAS:
+        simulate_io_faas(
+            current_second, io_jobs, phase, buffer_jobs, cpu_jobs,
+            finished_jobs, second_range, events, config,
+        )
+        return
+
+    # ----------------------------
     # Case: QaaS
     # ----------------------------
     if architecture == ArchitectureType.QAAS:
@@ -360,7 +370,8 @@ def simulate_cpu(
     second_range: float,
     events: List[Event],
     architecture,
-    config
+    config,
+    faas_gb_seconds=None,
 ):
     """
     Simulates CPU operations, allocating cores to jobs and handling shuffles.
@@ -393,6 +404,13 @@ def simulate_cpu(
     # and no-op if there’s nothing to do
     if not cpu_jobs:
         return 0
+
+    if architecture == ArchitectureType.FAAS:
+        return simulate_cpu_faas(
+            current_second, cpu_jobs, network_bandwidth, finished_jobs,
+            shuffle_jobs, waiting_jobs, io_jobs, {}, memory,
+            second_range, events, config, faas_gb_seconds or [0.0],
+        )
 
     if architecture in [ArchitectureType.QAAS, ArchitectureType.QAAS_CAPACITY]:
         return simulate_cpu_qaas(current_second, cpu_jobs, network_bandwidth,
@@ -768,3 +786,157 @@ def simulate_cpu_qaas(
         cpu_jobs.remove(job)
 
     return sum(core_allocation)
+
+
+# ============================================================
+# FaaS Stubs — TO BE IMPLEMENTED BY STUDENT
+# ============================================================
+
+
+def simulate_io_faas(
+    current_second: float,
+    io_jobs: deque,
+    phase: str,
+    buffer_jobs: deque,
+    cpu_jobs: deque,
+    finished_jobs: list,
+    second_range: float,
+    events: list,
+    config,
+):
+    """
+    Simulate the I/O phase for a FaaS (Function-as-a-Service) architecture.
+
+    In FaaS, each function invocation fetches its input data from object storage
+    (e.g., S3). There is no local SSD or DRAM cache — all data comes from remote
+    storage. The bandwidth available is config.s3_bandwidth per concurrent function.
+
+    FaaS cold starts are implicit in the data fetch latency (no separate cold_start
+    parameter). Each function invocation is independent — there is no shared
+    infrastructure between invocations.
+
+    Implementation requirements:
+    ----------
+    For each job in io_jobs:
+    1. Set job.io_start_timestamp on first entry (when it equals 0.0).
+    2. Calculate per-function bandwidth:
+       - Each concurrent function gets: config.s3_bandwidth / num_concurrent_functions
+       - But capped at config.s3_bandwidth (a single function can saturate its pipe).
+    3. Progress the I/O:
+       - elapsed = current_second - max(job.start_timestamp, current_second - second_range)
+       - processed_bytes = per_function_bw * elapsed
+       - If job.data_scanned_progress > processed_bytes:
+           - Reduce job.data_scanned_progress by processed_bytes
+           - Add elapsed/1000 to job.io_time
+           - Schedule an 'io_done' event for the estimated completion time
+       - If job.data_scanned_progress <= processed_bytes (I/O completes):
+           - Set job.data_scanned_progress = 0
+           - Calculate exact finish time and add to job.io_time
+           - Set job.io_end_timestamp
+           - Remove job from io_jobs
+           - If job not in buffer_jobs and not in cpu_jobs, append to finished_jobs
+    4. Enforce config.faas_concurrency_limit:
+       - Only process up to faas_concurrency_limit jobs at a time.
+       - Excess jobs remain queued in io_jobs awaiting the next tick.
+
+    Args:
+        current_second: Current simulation time in the event loop.
+        io_jobs: Queue of jobs in the I/O phase.
+        phase: Current event phase ('arrival', 'io_done', 'scale_check').
+        buffer_jobs: Queue of jobs waiting for CPU phase.
+        cpu_jobs: Queue of jobs in CPU phase.
+        finished_jobs: List of completed jobs.
+        second_range: Time step duration (dt).
+        events: Global event heap for scheduling future events.
+        config: SimulationConfig with FaaS parameters.
+
+    Returns:
+        None (modifies io_jobs, finished_jobs, events in place).
+    """
+    raise NotImplementedError(
+        "TODO: Implement FaaS I/O simulation. "
+        "Each function invocation reads from object storage (S3). "
+        "See docstring above for detailed requirements."
+    )
+
+
+def simulate_cpu_faas(
+    current_second: float,
+    cpu_jobs: list,
+    network_bandwidth: int,
+    finished_jobs: list,
+    shuffle_jobs: list,
+    waiting_jobs: deque,
+    io_jobs: deque,
+    shuffle: dict,
+    memory: list,
+    second_range: float,
+    events: list,
+    config,
+    faas_gb_seconds: list,
+) -> int:
+    """
+    Simulate the CPU phase for a FaaS (Function-as-a-Service) architecture.
+
+    In FaaS, each function invocation is allocated a fixed amount of memory
+    (config.faas_memory_mb). CPU power scales linearly with memory — more memory
+    means proportionally more vCPU. The baseline is 1 vCPU per 1769 MB of memory
+    (AWS Lambda proportionality).
+
+    Cost tracking: For each completed function invocation, calculate GB-seconds:
+        gb_seconds = (config.faas_memory_mb / 1024) * execution_duration_seconds
+    Accumulate this in faas_gb_seconds[0]:
+        faas_gb_seconds[0] += gb_seconds
+
+    Implementation requirements:
+    ----------
+    For each job in cpu_jobs:
+    1. Set job.cpu_start_timestamp on first entry (when it equals 0.0).
+    2. Calculate effective vCPUs for this function:
+       - vcpus = config.faas_memory_mb / 1769.0  (Lambda proportionality)
+       - This determines compute throughput per function.
+    3. FaaS has no shuffle phase — each function operates independently.
+       (set job.data_shuffle = 0 if needed, skip shuffle logic)
+    4. Progress the CPU work:
+       - elapsed = current_second - max(job.start_timestamp, current_second - second_range)
+       - work_done = vcpus * elapsed
+       - If job.cpu_time_progress > work_done:
+           - Reduce job.cpu_time_progress by work_done
+           - Add elapsed/1000 to job.processing_time
+           - Schedule a 'cpu_done' event
+       - If job.cpu_time_progress <= work_done (CPU completes):
+           - Finalize processing_time
+           - Set job.cpu_time_progress = 0
+           - Set job.cpu_end_timestamp
+           - Track GB-seconds cost: faas_gb_seconds[0] += gb_seconds
+           - Call job_finalization() to compute estimators and move to finished_jobs
+    5. Enforce config.faas_max_duration:
+       - If (current_second - job.cpu_start_timestamp) / 1000 > config.faas_max_duration:
+           - Force-complete the job (timeout)
+           - Still charge for the full duration
+    6. Return 0 (FaaS does not report slot allocation like EP does).
+
+    Args:
+        current_second: Current simulation time.
+        cpu_jobs: List of jobs in CPU phase.
+        network_bandwidth: Network bandwidth (unused for FaaS, no shuffle).
+        finished_jobs: List of completed jobs.
+        shuffle_jobs: Shuffle tracking list (unused for FaaS).
+        waiting_jobs: Jobs waiting for scheduling.
+        io_jobs: Jobs in I/O phase.
+        shuffle: Shuffle state dict (unused for FaaS).
+        memory: Memory tracking list.
+        second_range: Time step duration (dt).
+        events: Global event heap.
+        config: SimulationConfig with FaaS parameters.
+        faas_gb_seconds: Mutable list [float] for accumulating GB-seconds cost.
+
+    Returns:
+        int: Always 0 for FaaS (no infrastructure-level slot reporting).
+    """
+    raise NotImplementedError(
+        "TODO: Implement FaaS CPU simulation. "
+        "Each function gets memory-proportional vCPUs. "
+        "Track GB-seconds for cost. Enforce max duration. "
+        "See docstring above for detailed requirements."
+    )

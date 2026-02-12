@@ -373,5 +373,20 @@
         "io_bandwidth_values": [650],
         "memory_bandwidth_values": [40000],
         "dataset_values": [20]
+    },
+    "faas_basic": {
+        "architecture_values": [6],
+        "scheduling_values": [1],
+        "nodes_values": [0],
+        "vpu_values": [0],
+        "scaling_values": [1],
+        "cold_starts_values": [0],
+        "hit_rate_values": [0],
+        "instance_values": [0],
+        "arrival_rate_values": [0.1],
+        "network_bandwidth_values": [10],
+        "io_bandwidth_values": [0],
+        "memory_bandwidth_values": [0],
+        "dataset_values": [16]
     }
 }
