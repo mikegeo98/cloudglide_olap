@@ -789,7 +789,7 @@ def simulate_cpu_qaas(
 
 
 # ============================================================
-# FaaS Stubs — TO BE IMPLEMENTED BY STUDENT
+# FaaS Stubs — TO BE IMPLEMENTED
 # ============================================================
 
 
@@ -814,30 +814,6 @@ def simulate_io_faas(
     FaaS cold starts are implicit in the data fetch latency (no separate cold_start
     parameter). Each function invocation is independent — there is no shared
     infrastructure between invocations.
-
-    Implementation requirements:
-    ----------
-    For each job in io_jobs:
-    1. Set job.io_start_timestamp on first entry (when it equals 0.0).
-    2. Calculate per-function bandwidth:
-       - Each concurrent function gets: config.s3_bandwidth / num_concurrent_functions
-       - But capped at config.s3_bandwidth (a single function can saturate its pipe).
-    3. Progress the I/O:
-       - elapsed = current_second - max(job.start_timestamp, current_second - second_range)
-       - processed_bytes = per_function_bw * elapsed
-       - If job.data_scanned_progress > processed_bytes:
-           - Reduce job.data_scanned_progress by processed_bytes
-           - Add elapsed/1000 to job.io_time
-           - Schedule an 'io_done' event for the estimated completion time
-       - If job.data_scanned_progress <= processed_bytes (I/O completes):
-           - Set job.data_scanned_progress = 0
-           - Calculate exact finish time and add to job.io_time
-           - Set job.io_end_timestamp
-           - Remove job from io_jobs
-           - If job not in buffer_jobs and not in cpu_jobs, append to finished_jobs
-    4. Enforce config.faas_concurrency_limit:
-       - Only process up to faas_concurrency_limit jobs at a time.
-       - Excess jobs remain queued in io_jobs awaiting the next tick.
 
     Args:
         current_second: Current simulation time in the event loop.
@@ -888,33 +864,6 @@ def simulate_cpu_faas(
     Accumulate this in faas_gb_seconds[0]:
         faas_gb_seconds[0] += gb_seconds
 
-    Implementation requirements:
-    ----------
-    For each job in cpu_jobs:
-    1. Set job.cpu_start_timestamp on first entry (when it equals 0.0).
-    2. Calculate effective vCPUs for this function:
-       - vcpus = config.faas_memory_mb / 1769.0  (Lambda proportionality)
-       - This determines compute throughput per function.
-    3. FaaS has no shuffle phase — each function operates independently.
-       (set job.data_shuffle = 0 if needed, skip shuffle logic)
-    4. Progress the CPU work:
-       - elapsed = current_second - max(job.start_timestamp, current_second - second_range)
-       - work_done = vcpus * elapsed
-       - If job.cpu_time_progress > work_done:
-           - Reduce job.cpu_time_progress by work_done
-           - Add elapsed/1000 to job.processing_time
-           - Schedule a 'cpu_done' event
-       - If job.cpu_time_progress <= work_done (CPU completes):
-           - Finalize processing_time
-           - Set job.cpu_time_progress = 0
-           - Set job.cpu_end_timestamp
-           - Track GB-seconds cost: faas_gb_seconds[0] += gb_seconds
-           - Call job_finalization() to compute estimators and move to finished_jobs
-    5. Enforce config.faas_max_duration:
-       - If (current_second - job.cpu_start_timestamp) / 1000 > config.faas_max_duration:
-           - Force-complete the job (timeout)
-           - Still charge for the full duration
-    6. Return 0 (FaaS does not report slot allocation like EP does).
 
     Args:
         current_second: Current simulation time.
