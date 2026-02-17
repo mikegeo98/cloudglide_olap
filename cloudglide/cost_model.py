@@ -79,10 +79,13 @@ def faas_cost(
     Returns:
         Total cost in USD.
     """
-    raise NotImplementedError(
-        "TODO: Implement FaaS hybrid cost calculation. "
-        "See docstring above for the formula."
-    )
+    invocation_cost = num_invocations * cost_per_invocation
+    duration_cost   = total_gb_seconds * cost_per_gb_second
+
+    total_cost      = invocation_cost + duration_cost
+
+    logging.debug(f"FaaS cost: ${invocation_cost:.3f} + ${duration_cost:.3f} = ${total_cost:.2f}")
+    return total_cost
 
 
 def qaas_total_cost(total_data_scanned_megabytes: float) -> float:
