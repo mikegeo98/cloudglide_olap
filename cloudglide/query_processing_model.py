@@ -842,9 +842,9 @@ def simulate_io_faas(
     if num_concurrent == 0:
         return
 
-    # Bandwidth per function: total S3 bandwidth divided among concurrent functions
+    # Bandwidth per function: total S3 bandwidth
     # config.s3_bandwidth is in MB/s, convert to bytes/s for consistency
-    per_job_bw = (config.s3_bandwidth * 1_000_000) / num_concurrent
+    per_job_bw = config.s3_bandwidth * 1_000_000
 
     for job in active_jobs:
         # Set I/O start timestamp on first entry
@@ -945,7 +945,7 @@ def simulate_cpu_faas(
     vcpus_per_function = config.faas_memory_mb / 1769.0
 
     # GB of memory for cost calculation
-    memory_gb = config.faas_memory_mb / 1000.0
+    memory_gb = config.faas_memory_mb / 1024.0
 
     to_remove = []
 
@@ -956,6 +956,14 @@ def simulate_cpu_faas(
 
         # Calculate elapsed time this tick
         elapsed = current_second - max(job.start_timestamp, current_second - second_range)
+
+        # Amdahl's Law: When vCPUs > 1, apply parallel speedup with diminishing returns
+        # This models multi-vCPU Lambda functions (high memory configs like 3GB+ get >1 vCPU)
+        p = config.parallelizable_portion
+        if vcpus_per_function > 1.0:
+            speedup = 1 / ((1 - p) + (p / vcpus_per_function))
+        else:
+            speedup = 1.0 # No parallelism penalty
 
         # Check for timeout (max duration exceeded)
         job_duration = current_second - job.cpu_start_timestamp
@@ -977,8 +985,8 @@ def simulate_cpu_faas(
             continue
 
         # No shuffle phase in FaaS - functions are independent
-        # CPU work scales with vCPUs
-        work = vcpus_per_function * elapsed
+        # CPU work scales with vCPUs and Amdahl's Law speedup
+        work = vcpus_per_function * speedup * elapsed
 
         if job.cpu_time_progress > work:
             # Partial progress - job continues
@@ -987,12 +995,13 @@ def simulate_cpu_faas(
 
             # Schedule cpu_done event
             remaining = job.cpu_time_progress
-            rate = vcpus_per_function
+            rate = vcpus_per_function * speedup
             delta = remaining / rate if rate > 0 else float('inf')
             schedule_event(job, current_second + delta, "cpu_done", events)
         else:
             # Job completes this tick
-            final_work_time = job.cpu_time_progress / vcpus_per_function if vcpus_per_function > 0 else 0
+            effective_rate = vcpus_per_function * speedup
+            final_work_time = job.cpu_time_progress / effective_rate if effective_rate > 0 else 0
             job.processing_time += final_work_time / 1000
             job.cpu_time_progress = 0
 
