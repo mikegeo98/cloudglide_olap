@@ -842,9 +842,9 @@ def simulate_io_faas(
     if num_concurrent == 0:
         return
 
-    # Bandwidth per function: total S3 bandwidth
-    # config.s3_bandwidth is in MB/s, convert to bytes/s for consistency
-    per_job_bw = config.s3_bandwidth * 1_000_000
+    # Bandwidth per function: each FaaS invocation gets independent S3 bandwidth
+    # Use same unit convention as DWaaS I/O: bw in MB/s, data in MB, elapsed in ms
+    per_job_bw = config.s3_bandwidth
 
     for job in active_jobs:
         # Set I/O start timestamp on first entry
@@ -864,22 +864,23 @@ def simulate_io_faas(
         # Calculate elapsed time this tick
         elapsed = current_second - max(job.start_timestamp, current_second - second_range)
 
-        # Calculate bytes processed this tick
-        processed = per_job_bw * elapsed
+        # Use same unit convention as DWaaS I/O:
+        # needed = data_progress * 1000, avail = bw * elapsed_ms
+        needed = job.data_scanned_progress * 1000
+        avail = per_job_bw * elapsed
 
-        if job.data_scanned_progress > processed:
+        if needed > avail:
             # Partial progress - job continues in next tick
-            job.data_scanned_progress -= processed
+            job.data_scanned_progress -= avail / 1000
             job.io_time += elapsed / 1000  # Convert to seconds
 
             # Schedule completion event for remaining data
-            remaining = job.data_scanned_progress
+            remaining = job.data_scanned_progress * 1000
             finish_delta = remaining / per_job_bw if per_job_bw > 0 else float('inf')
             schedule_event(job, current_second + finish_delta, 'io_done', events)
         else:
             # Job completes this tick - compute exact finish time
-            rem = job.data_scanned_progress
-            finish_delta = rem / per_job_bw if per_job_bw > 0 else 0
+            finish_delta = needed / per_job_bw if per_job_bw > 0 else 0
             job.io_time += finish_delta / 1000  # Convert to seconds
             job.data_scanned_progress = 0
 
@@ -985,8 +986,9 @@ def simulate_cpu_faas(
             continue
 
         # No shuffle phase in FaaS - functions are independent
-        # CPU work scales with vCPUs and Amdahl's Law speedup
-        work = vcpus_per_function * speedup * elapsed
+        # Amdahl's Law speedup S(N) already represents the speedup from N vCPUs
+        # over 1 vCPU, so work rate = speedup * elapsed (NOT vcpus * speedup)
+        work = speedup * elapsed
 
         if job.cpu_time_progress > work:
             # Partial progress - job continues
@@ -995,12 +997,12 @@ def simulate_cpu_faas(
 
             # Schedule cpu_done event
             remaining = job.cpu_time_progress
-            rate = vcpus_per_function * speedup
+            rate = speedup
             delta = remaining / rate if rate > 0 else float('inf')
             schedule_event(job, current_second + delta, "cpu_done", events)
         else:
             # Job completes this tick
-            effective_rate = vcpus_per_function * speedup
+            effective_rate = speedup
             final_work_time = job.cpu_time_progress / effective_rate if effective_rate > 0 else 0
             job.processing_time += final_work_time / 1000
             job.cpu_time_progress = 0
