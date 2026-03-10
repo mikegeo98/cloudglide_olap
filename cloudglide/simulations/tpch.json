@@ -191,6 +191,31 @@
       ]
     },
     {
+      "name": "faas_tpch_sf85",
+      "architecture": "FAAS",
+      "dataset": 23,
+      "runs": [
+        {
+          "name": "faas_2048mb",
+          "config_overrides": {
+            "faas_memory_mb": 2048
+          }
+        },
+        {
+          "name": "faas_4096mb",
+          "config_overrides": {
+            "faas_memory_mb": 4096
+          }
+        },
+        {
+          "name": "faas_8192mb",
+          "config_overrides": {
+            "faas_memory_mb": 8192
+          }
+        }
+      ]
+    },
+    {
       "name": "concurrency_test",
       "architecture": "DWAAS",
       "dataset": 997,
