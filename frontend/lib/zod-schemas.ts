@@ -91,6 +91,11 @@ export const createArchitectureSchema = (archType: typeof ArchitectureType[keyof
 
                 network_bandwidth: z.number().optional(),
             });
+        case ArchitectureType.FAAS:
+            return z.object({
+                architecture: z.literal(archType),
+                dataset: z.number(),
+            });
         default:
             throw new Error(`Unknown architecture type: ${archType}`);
     }
@@ -225,4 +230,9 @@ export type ZodQAAS = {
     architecture: z.ZodLiteral<string>;
     dataset: z.ZodNumber;
     network_bandwidth: z.ZodNumber;
+}
+
+export type ZodFAAS = {
+    architecture: z.ZodLiteral<string>;
+    dataset: z.ZodNumber;
 }

@@ -129,6 +129,7 @@ export default function InputData() {
                                                 <SelectItem value="998">Concurrency</SelectItem>
                                                 <SelectItem value="22">Tenk</SelectItem>
                                                 <SelectItem value="999">TPC_H all runs</SelectItem>
+                                                <SelectItem value="23">TPC_H faas sf85</SelectItem>
                                             </SelectGroup>
                                         </SelectContent>
                                     </Select>

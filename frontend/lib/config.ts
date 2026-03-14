@@ -3,6 +3,7 @@ export const ArchitectureType = {
     DWAAS_AUTOSCALING: "DWAAS_AUTOSCALING",
     ELASTIC_POOL: "ELASTIC_POOL",
     QAAS: "QAAS",
+    FAAS: "FAAS",
 }
 
 export interface InstanceConfig {

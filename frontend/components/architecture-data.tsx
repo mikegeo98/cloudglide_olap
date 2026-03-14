@@ -27,7 +27,7 @@ import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { createArchitectureSchema, ZodDWAAS, ZodDWAASAutoscaling, ZodElasticPool, ZodQAAS } from "@/lib/zod-schemas";
+import { createArchitectureSchema, ZodDWAAS, ZodDWAASAutoscaling, ZodElasticPool, ZodFAAS, ZodQAAS } from "@/lib/zod-schemas";
 import { ArchitectureType, instanceTypes } from "@/lib/config";
 import { ChevronsUpDown, Plus } from "lucide-react";
 import ClusterView from "./cluster-view";
@@ -65,6 +65,9 @@ export default function ArchitectureData() {
                         break
                     case ArchitectureType.QAAS:
                         form = <QAASForm key={index} scenario={scenario} setCollapsed={(c: boolean) => setCollapsed(prev => ({ ...prev, [index]: c }))} />
+                        break
+                    case ArchitectureType.FAAS:
+                        form = <FAASForm key={index} scenario={scenario} setCollapsed={(c: boolean) => setCollapsed(prev => ({ ...prev, [index]: c }))} />
                         break
                     default:
                         return null;
@@ -123,6 +126,8 @@ export default function ArchitectureData() {
                                     return <ElasticPoolForm />;
                                 case ArchitectureType.QAAS:
                                     return <QAASForm />;
+                                case ArchitectureType.FAAS:
+                                    return <FAASForm />;
                                 default:
                                     return null;
                             }
@@ -1093,6 +1098,82 @@ function QAASForm({ scenario, setCollapsed }: { scenario?: z.infer<z.ZodObject<Z
                                 </FormItem>
                             )}
                         />
+                        {scenario ? (
+                            <Button type="submit" variant="default">
+                                {loading ? <Spinner /> : "save"}
+                            </Button>
+                        ) : <NextButton />}
+                    </form>
+                </Form>
+            </div>
+            <div className="flex-1">
+                <ClusterView nodes={1} vpus={4} instanceType={instanceTypes[0]} />
+            </div>
+        </div>
+    )
+}
+
+function FAASForm({ scenario, setCollapsed }: { scenario?: z.infer<z.ZodObject<ZodFAAS>>, setCollapsed?: (c: boolean) => void }) {
+    const { stage, setStage, data, setData } = React.useContext(InputContext)
+    const formSchema: z.ZodObject<ZodFAAS> = createArchitectureSchema(ArchitectureType.FAAS) as z.ZodObject<ZodFAAS>
+    const [loading, setLoading] = React.useState(false)
+
+    const form = useForm<z.infer<typeof formSchema>>({
+        resolver: zodResolver(formSchema),
+        defaultValues: {
+            ...(scenario ? scenario : {
+                architecture: ArchitectureType.FAAS,
+                dataset: data.dataset,
+            }),
+        }
+    })
+
+    function onSubmit(values: z.infer<typeof formSchema>) {
+        if (scenario) {
+            setLoading(true)
+            setData({
+                ...data,
+                scenarios: data.scenarios.map((s) =>
+                    s === scenario ? values : s
+                ),
+            })
+
+            // Simulate a delay for loading
+            // So the user can be sure the data is saved
+            setTimeout(() => {
+                setLoading(false)
+            }, 300)
+            if (setCollapsed) setCollapsed(true)
+        } else {
+            setData({
+                ...data,
+                scenarios: [
+                    ...data.scenarios,
+                    values
+                ]
+            })
+            setStage(stage + 1)
+        }
+    }
+
+    return (
+        <div className="flex w-full justify-center gap-6">
+            <div className="flex-1 max-w-1/2">
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                        {/* <FormField
+                            control={form.control}
+                            name="network_bandwidth"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Network bandwidth</FormLabel>
+                                    <FormControl>
+                                        <Input type="number" defaultValue={field.value} onChange={(e) => field.onChange(Number.parseInt(e.target.value))} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        /> */}
                         {scenario ? (
                             <Button type="submit" variant="default">
                                 {loading ? <Spinner /> : "save"}
