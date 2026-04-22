@@ -3,24 +3,45 @@
 import sys
 import json
 import logging
-from typing import Tuple, Dict
-from cloudglide.simulation_runner import run_simulation
-from cloudglide.config import DEFAULT_OUTPUT_PREFIX
+import itertools
+from typing import Tuple, Dict, List
+from cloudglide.simulation_runner import run_simulation, SimulationRun
+from cloudglide.config import SimulationConfig, ArchitectureType
 
-
-def load_test_cases(json_file_path: str) -> dict:
+def load_test_cases(json_file_path: str) -> Tuple[Dict, Dict[str, Dict]]:
     """
-    Load test cases from a JSON configuration file.
+    Load test cases from a JSON configuration file. Supports the new schema
+    (`defaults` + `scenarios`) as well as the legacy dictionary-of-cases format.
     """
     try:
         with open(json_file_path, 'r') as file:
             test_cases = json.load(file)
-        return test_cases
+
+        if "scenarios" in test_cases:
+            defaults = test_cases.get("defaults", {})
+            scenarios_raw = test_cases.get("scenarios", [])
+            scenario_map = {}
+            if isinstance(scenarios_raw, dict):
+                for name, payload in scenarios_raw.items():
+                    payload.setdefault("name", name)
+                    scenario_map[name] = payload
+            else:
+                for scenario in scenarios_raw:
+                    if "name" not in scenario:
+                        raise ValueError("Each scenario entry must include a 'name'.")
+                    scenario_map[scenario["name"]] = scenario
+            return defaults, scenario_map
+
+        # Legacy format fallback: no defaults block, treat the full dict as the scenario map.
+        return {}, test_cases
     except FileNotFoundError:
         logging.error(f"Configuration file '{json_file_path}' not found.")
         sys.exit(1)
     except json.JSONDecodeError:
         logging.error(f"Failed to decode JSON from '{json_file_path}'. Please check the file format.")
+        sys.exit(1)
+    except ValueError as exc:
+        logging.error(str(exc))
         sys.exit(1)
 
 
@@ -40,6 +61,279 @@ def load_benchmark_data(benchmark_file_path: str) -> Dict:
         sys.exit(1)
 
 
+SCHEDULING_POLICIES = {
+    "fcfs": 0,
+    "sjf": 1,
+    "ljf": 2,
+    "multi": 3,
+    "multi_level": 3,
+}
+
+SCALING_POLICIES = {
+    "queue": 1,
+    "queue_based": 1,
+    "reactive": 2,
+    "predictive": 3,
+}
+
+
+def _normalize_name(value: str) -> str:
+    return value.strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def map_scheduling_policy(value, fallback: int) -> int:
+    if value is None:
+        return fallback
+    if isinstance(value, int):
+        return value
+    key = _normalize_name(str(value))
+    if key not in SCHEDULING_POLICIES:
+        raise ValueError(f"Unknown scheduling policy '{value}'.")
+    return SCHEDULING_POLICIES[key]
+
+
+def map_scaling_policy(value, fallback: int) -> int:
+    if value is None:
+        return fallback
+    if isinstance(value, int):
+        return value
+    key = _normalize_name(str(value))
+    if key not in SCALING_POLICIES:
+        raise ValueError(f"Unknown scaling policy '{value}'.")
+    return SCALING_POLICIES[key]
+
+
+def parse_architecture(value) -> ArchitectureType:
+    if isinstance(value, ArchitectureType):
+        return value
+    if isinstance(value, int):
+        return ArchitectureType(value)
+    if isinstance(value, str):
+        key = _normalize_name(value).upper()
+        return ArchitectureType[key]
+    raise ValueError(f"Unsupported architecture value '{value}'.")
+
+
+def extract_option_payload(payload: Dict) -> Dict:
+    return {k: v for k, v in (payload or {}).items() if k != "policy"}
+
+
+def build_base_config(defaults: Dict) -> Tuple[SimulationConfig, int, int]:
+    config = SimulationConfig()
+
+    # Apply general simulation overrides
+    simulation_overrides = defaults.get("simulation", {})
+    config.apply_overrides(simulation_overrides)
+
+    # Apply architecture-specific overrides
+    dwaas_overrides = defaults.get("dwaas", {})
+    if dwaas_overrides:
+        config.apply_overrides(dwaas_overrides)
+
+    ep_overrides = defaults.get("ep", {})
+    if ep_overrides:
+        config.apply_overrides(ep_overrides)
+
+    qaas_overrides = defaults.get("qaas", {})
+    if qaas_overrides:
+        config.apply_overrides(qaas_overrides)
+
+    # Apply scheduling defaults
+    sched_defaults = defaults.get("scheduling", {}) or {}
+    sched_options = extract_option_payload(sched_defaults)
+    if sched_options:
+        config.apply_overrides({"scheduling": sched_options})
+    default_sched_policy = map_scheduling_policy(
+        sched_defaults.get("policy"),
+        SCHEDULING_POLICIES["sjf"],  # Changed default from FCFS to SJF
+    )
+
+    # Apply scaling defaults
+    scaling_defaults = defaults.get("scaling", {}) or {}
+    scaling_options = extract_option_payload(scaling_defaults)
+    if scaling_options:
+        config.apply_overrides({"scaling": scaling_options})
+    default_scaling_policy = map_scaling_policy(
+        scaling_defaults.get("policy"),
+        SCALING_POLICIES["queue"],
+    )
+
+    return config, default_sched_policy, default_scaling_policy
+
+
+def resolve_value(run_payload: Dict, scenario_payload: Dict, key: str, default=None, required: bool = False):
+    if key in run_payload:
+        return run_payload[key]
+    if scenario_payload and key in scenario_payload:
+        return scenario_payload[key]
+    if required and default is None:
+        raise ValueError(f"Scenario '{scenario_payload.get('name')}' missing required field '{key}'.")
+    return default
+
+
+def build_runs_for_scenario(
+    scenario_name: str,
+    scenario_payload: Dict,
+    base_config: SimulationConfig,
+    default_sched_policy: int,
+    default_scaling_policy: int,
+) -> List[SimulationRun]:
+    scenario_config = base_config.copy()
+    scenario_config.apply_overrides(scenario_payload.get("config_overrides", {}))
+
+    scenario_sched_policy = default_sched_policy
+    scenario_sched_payload = scenario_payload.get("scheduling")
+    if scenario_sched_payload:
+        scenario_sched_policy = map_scheduling_policy(
+            scenario_sched_payload.get("policy"),
+            default_sched_policy,
+        )
+        scen_sched_options = extract_option_payload(scenario_sched_payload)
+        if scen_sched_options:
+            scenario_config.apply_overrides({"scheduling": scen_sched_options})
+
+    scenario_scaling_policy = default_scaling_policy
+    scenario_scaling_payload = scenario_payload.get("scaling")
+    if scenario_scaling_payload:
+        scenario_scaling_policy = map_scaling_policy(
+            scenario_scaling_payload.get("policy"),
+            default_scaling_policy,
+        )
+        scen_scaling_options = extract_option_payload(scenario_scaling_payload)
+        if scen_scaling_options:
+            scenario_config.apply_overrides({"scaling": scen_scaling_options})
+
+    run_definitions = scenario_payload.get("runs")
+    legacy_value_keys = [key for key in scenario_payload.keys() if key.endswith("_values")]
+    if not run_definitions and legacy_value_keys:
+        param_names = [key.replace("_values", "") for key in legacy_value_keys]
+        value_lists = [scenario_payload[key] for key in legacy_value_keys]
+        run_definitions = [
+            dict(zip(param_names, combo))
+            for combo in itertools.product(*value_lists)
+        ]
+    if not run_definitions:
+        run_definitions = [scenario_payload]
+
+    runs: List[SimulationRun] = []
+    for idx, run_payload in enumerate(run_definitions, start=1):
+        run_config = scenario_config.copy()
+
+        run_sched_payload = run_payload.get("scheduling")
+        if isinstance(run_sched_payload, dict):
+            run_sched_policy = map_scheduling_policy(
+                run_sched_payload.get("policy"),
+                scenario_sched_policy,
+            )
+            run_sched_options = extract_option_payload(run_sched_payload)
+            if run_sched_options:
+                run_config.apply_overrides({"scheduling": run_sched_options})
+        else:
+            run_sched_policy = map_scheduling_policy(
+                run_sched_payload,
+                scenario_sched_policy,
+            )
+
+        run_scaling_payload = run_payload.get("scaling")
+        if isinstance(run_scaling_payload, dict):
+            run_scaling_policy = map_scaling_policy(
+                run_scaling_payload.get("policy"),
+                scenario_scaling_policy,
+            )
+            run_scaling_options = extract_option_payload(run_scaling_payload)
+            if run_scaling_options:
+                run_config.apply_overrides({"scaling": run_scaling_options})
+        else:
+            run_scaling_policy = map_scaling_policy(
+                run_scaling_payload,
+                scenario_scaling_policy,
+            )
+
+        run_config.apply_overrides(run_payload.get("config_overrides", {}))
+        if "use_spot_instances" in run_payload or "spot" in run_payload:
+            run_config.use_spot_instances = run_payload.get(
+                "use_spot_instances",
+                run_payload.get("spot", run_config.use_spot_instances),
+            )
+
+        architecture_value = run_payload.get("architecture", scenario_payload.get("architecture"))
+        if architecture_value is None:
+            raise ValueError(f"Scenario '{scenario_name}' is missing 'architecture' in run #{idx}.")
+        architecture = parse_architecture(architecture_value)
+
+        dataset_value = run_payload.get(
+            "dataset",
+            run_payload.get(
+                "dataset_index",
+                scenario_payload.get("dataset", scenario_payload.get("dataset_index")),
+            ),
+        )
+        if dataset_value is None:
+            raise ValueError(f"Scenario '{scenario_name}' is missing 'dataset' for run #{idx}.")
+
+        run_name = run_payload.get("name", f"{scenario_name}_{idx}")
+
+        # Apply architecture-specific defaults
+        arch_value = architecture.value if isinstance(architecture, ArchitectureType) else architecture
+
+        # QaaS (architecture 3+): Force infrastructure params to 0, ignore user input
+        if arch_value >= 3:
+            nodes = 0
+            vpu = 0
+            hit_rate = 0.0
+            cold_start = 0.0
+            io_bandwidth = 0
+            memory_bandwidth = 0
+            instance = 0
+            # For QaaS, only dataset and architecture are required
+            # Network bandwidth can still be configured (default 10 Gbps = 10000 Mbps internally)
+            network_bandwidth = resolve_value(run_payload, scenario_payload, "network_bandwidth", 10)
+        # Elastic Pool (architecture 2): nodes calculated internally from VPU
+        elif arch_value == 2:
+            nodes = resolve_value(run_payload, scenario_payload, "nodes", 1)  # Will be ignored, but kept for compatibility
+            vpu = resolve_value(run_payload, scenario_payload, "vpu", 0, required=True)
+            hit_rate = resolve_value(run_payload, scenario_payload, "hit_rate", 0.8)
+            cold_start = resolve_value(run_payload, scenario_payload, "cold_start", 120.0)
+            io_bandwidth = resolve_value(run_payload, scenario_payload, "io_bandwidth", 1200)
+            memory_bandwidth = resolve_value(run_payload, scenario_payload, "memory_bandwidth", 40000)
+            network_bandwidth = resolve_value(run_payload, scenario_payload, "network_bandwidth", 10000)
+            instance = 0  # Not used for EP
+        # DWaaS and DWaaS_AUTOSCALING (architecture 0, 1)
+        else:
+            nodes = resolve_value(run_payload, scenario_payload, "nodes", 1, required=True)
+            vpu = 0  # Not used for DWaaS
+            hit_rate = resolve_value(run_payload, scenario_payload, "hit_rate", 0.7)
+            cold_start = resolve_value(run_payload, scenario_payload, "cold_start", 60.0 if arch_value == 1 else 0.0)
+            io_bandwidth = resolve_value(run_payload, scenario_payload, "io_bandwidth", 650)
+            memory_bandwidth = resolve_value(run_payload, scenario_payload, "memory_bandwidth", 40000)
+            network_bandwidth = resolve_value(run_payload, scenario_payload, "network_bandwidth", 10000)
+            instance = resolve_value(run_payload, scenario_payload, "instance", 0)
+
+        # cpu_cores is optional for DWaaS architectures (will be calculated from instance + nodes if not provided)
+        cpu_cores = resolve_value(run_payload, scenario_payload, "cpu_cores", None)
+
+        runs.append(
+            SimulationRun(
+                name=run_name,
+                architecture=architecture,
+                scheduling_policy=run_sched_policy,
+                nodes=nodes,
+                vpu=vpu,
+                scaling_policy=run_scaling_policy,
+                cold_start=cold_start,
+                hit_rate=hit_rate,
+                instance=instance,
+                network_bandwidth=network_bandwidth,
+                io_bandwidth=io_bandwidth,
+                memory_bandwidth=memory_bandwidth,
+                dataset_index=dataset_value,
+                config=run_config,
+                cpu_cores=cpu_cores,
+            )
+        )
+
+    return runs
+
 def parse_arguments() -> Tuple[str, str, str, bool, str]:
     """
     Parse command-line arguments.
@@ -51,7 +345,7 @@ def parse_arguments() -> Tuple[str, str, str, bool, str]:
     parser.add_argument('json_file_path', type=str, help='Path to the JSON configuration file.')
     parser.add_argument('--benchmark', action='store_true', help='Enable benchmarking mode.')
     parser.add_argument('--benchmark_file', type=str, default='benchmark_data.json', help='Path to the benchmark data JSON file.')
-    parser.add_argument('--output_prefix', type=str, default=DEFAULT_OUTPUT_PREFIX, help='Prefix for output files.')
+    parser.add_argument('--output_prefix', type=str, default='cloudglide/output_simulation/simulation', help='Prefix for output files.')
 
     args = parser.parse_args()
 
@@ -61,7 +355,7 @@ def parse_arguments() -> Tuple[str, str, str, bool, str]:
 def compare_results(simulation_time: float, expected_time: float, tolerance: float = 0.05) -> bool:
     """
     Compare simulation execution time with expected execution time within a tolerance.
-    
+
     Returns True if within tolerance, else False.
     """
     lower_bound = expected_time * (1 - tolerance)
@@ -92,46 +386,49 @@ def main():
     # Parse command-line arguments
     test_case_keyword, json_file_path, output_prefix, benchmark_mode, benchmark_file_path= parse_arguments()
 
-    # Load test cases
-    test_cases = load_test_cases(json_file_path)
+    # Load test cases using the new flattened schema
+    defaults, scenarios = load_test_cases(json_file_path)
 
     # Validate test case keyword
-    if test_case_keyword not in test_cases:
+    if test_case_keyword not in scenarios:
         logging.error(f"Test case keyword '{test_case_keyword}' not found in '{json_file_path}'.")
         sys.exit(1)
 
-    test_case = test_cases[test_case_keyword]
+    scenario = scenarios[test_case_keyword]
+    base_config, default_sched_policy, default_scaling_policy = build_base_config(defaults)
+    try:
+        runs = build_runs_for_scenario(
+            test_case_keyword,
+            scenario,
+            base_config,
+            default_sched_policy,
+            default_scaling_policy,
+        )
+    except ValueError as exc:
+        logging.error(str(exc))
+        sys.exit(1)
 
-    # Extract values from the test case
-    architecture_values = test_case.get("architecture_values", [0])
-    scheduling_values = test_case.get("scheduling_values", [1])
-    nodes_values = test_case.get("nodes_values", [1])
-    vpu_values = test_case.get("vpu_values", [0])
-    scaling_values = test_case.get("scaling_values", [1])
-    cold_starts_values = test_case.get("cold_starts_values", [False])
-    hit_rate_values = test_case.get("hit_rate_values", [0.9])
-    instance_values = test_case.get("instance_values", [0])
-    arrival_rate_values = test_case.get("arrival_rate_values", [10.0])
-    network_bandwidth_values = test_case.get("network_bandwidth_values", [10000])
-    io_bandwidth_values = test_case.get("io_bandwidth_values", [650])
-    memory_bandwidth_values = test_case.get("memory_bandwidth_values", [40000])
-    dataset_values = test_case.get("dataset_values", [1])
+    run_metadata = [
+        {
+            "architecture": run.architecture.value,
+            "scheduling": run.scheduling_policy,
+            "nodes": run.nodes,
+            "vpu": run.vpu,
+            "scaling": run.scaling_policy,
+            "cold_starts": run.cold_start,
+            "hit_rate": run.hit_rate,
+            "instance": run.instance,
+            "network_bandwidth": run.network_bandwidth,
+            "io_bandwidth": run.io_bandwidth,
+            "memory_bandwidth": run.memory_bandwidth,
+            "dataset": run.dataset_index,
+        }
+        for run in runs
+    ]
 
     # Run simulations
     output_files, scaling_sequences, memory_sequences, results = run_simulation(
-        architecture=architecture_values,
-        scheduling=scheduling_values,
-        nodes=nodes_values,
-        vpu=vpu_values,
-        scaling=scaling_values,
-        cold_starts=cold_starts_values,
-        hit_rate=hit_rate_values,
-        instance=instance_values,
-        arrival_rate=arrival_rate_values,
-        network_bandwidth=network_bandwidth_values,
-        io_bandwidth=io_bandwidth_values,
-        memory_bandwidth=memory_bandwidth_values,
-        dataset_index=dataset_values,
+        runs=runs,
         output_prefix=output_prefix
     )
 
@@ -141,30 +438,36 @@ def main():
         benchmark_data = load_benchmark_data(benchmark_file_path)
 
         comparisons = {}
+        comparison_params = [
+            "architecture", "scheduling", "nodes", "vpu", "scaling", "cold_starts",
+            "hit_rate", "instance", "network_bandwidth",
+            "io_bandwidth", "memory_bandwidth", "dataset"
+        ]
 
-        for idx, (key, expected) in enumerate(benchmark_data.items()):
-            # Match test case parameters
-            if all(test_case.get(param) == expected.get(param) for param in [
-                "architecture", "scheduling", "nodes", "vpu", "scaling", "cold_starts",
-                "hit_rate", "instance", "arrival_rate", "network_bandwidth",
-                "io_bandwidth", "memory_bandwidth", "dataset"
-            ]):
-                # Use the index to fetch the simulation result for simulation time
-                simulation_time = results[idx][0] if idx < len(results) else None
-                expected_time = expected.get("expected_execution_time")             
+        for key, expected in benchmark_data.items():
+            match_idx = next(
+                (
+                    i for i, meta in enumerate(run_metadata)
+                    if all(meta.get(param) == expected.get(param) for param in comparison_params)
+                ),
+                None,
+            )
+            if match_idx is not None:
+                simulation_time = results[match_idx][0]
+                expected_time = expected.get("expected_execution_time")
                 # Extract additional expected metrics
-                simulation_median = results[idx][3] if idx < len(results) else None
-                expected_median = expected.get("expected_median")            
-                simulation_95 = results[idx][4] if idx < len(results) else None
-                expected_95th = expected.get("expected_95th")            
-                simulation_cost = results[idx][2] if idx < len(results) else None
-                expected_cost = expected.get("expected_cost")            
+                simulation_median = results[match_idx][3]
+                expected_median = expected.get("expected_median")
+                simulation_95 = results[match_idx][4]
+                expected_95th = expected.get("expected_95th")
+                simulation_cost = results[match_idx][2]
+                expected_cost = expected.get("expected_cost")
                 # Compare each metric if available
                 within_time = compare_results(simulation_time, expected_time) if simulation_time and expected_time else False
                 within_median = compare_results(simulation_median, expected_median) if simulation_median and expected_median else False
                 within_95th = compare_results(simulation_95, expected_95th) if simulation_95 and expected_95th else False
-                within_cost = compare_results(simulation_cost, expected_cost) if simulation_cost and expected_cost else False             
-                overall_within = within_time and within_median and within_95th and within_cost           
+                within_cost = compare_results(simulation_cost, expected_cost) if simulation_cost and expected_cost else False
+                overall_within = within_time and within_median and within_95th and within_cost
                 comparisons[key] = {
                     "simulation_time": simulation_time,
                     "expected_time": expected_time,
@@ -187,7 +490,7 @@ def main():
                     "avg_cost": None,
                     "expected_cost": expected.get("expected_cost"),
                     "within_tolerance": False,
-                    "note": "Test case parameters do not match."
+                    "note": "Test case parameters do not match any simulated run."
                 }
 
         # Generate benchmark report
@@ -204,7 +507,7 @@ def main():
                 f"95th Perc = {comp['perc95_sim_time']} (Expected = {comp['expected_95th']}), "
                 f"Avg Cost = {comp['avg_cost']} (Expected = {comp['expected_cost']}), "
                 f"Within tolerance = {comp['within_tolerance']}\033[0m")
-            
+
 
         def load_simulation_results(simulation_csv_path: str) -> dict:
             """

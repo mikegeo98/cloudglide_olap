@@ -1,0 +1,137 @@
+{
+  "defaults": {
+    "simulation": {
+      "interrupt_probability": 0.01,
+      "interrupt_duration": 6000,
+      "logging_interval": 60,
+      "default_max_duration": 108000,
+      "default_estimator": "pm",
+      "pm_p": 4.0,
+      "delta": 0.3,
+      "queue_agg": "sum",
+      "materialization_fraction": 0.25,
+      "parallelizable_portion": 0.9,
+      "s3_bandwidth": 1000
+    },
+    "dwaas": {
+      "cost_per_second_redshift": 0.00030166666,
+      "spot_discount": 0.5,
+      "cold_start_delay": 60.0
+    },
+    "ep": {
+      "cost_per_rpu_hour": 0.375,
+      "cache_warmup_gamma": 0.05,
+      "cold_start_delay": 120.0
+    },
+    "qaas": {
+      "cost_per_slot_hour": 0.04,
+      "qaas_cost_per_tb": 5.0,
+      "qaas_io_per_core_bw": 150,
+      "qaas_shuffle_bw_per_core": 50,
+      "qaas_base_cores": 4,
+      "qaas_base_time_limit": 2,
+      "core_alloc_window": 10.0
+    },
+    "scheduling": {
+      "policy": "fcfs",
+      "max_io_concurrency": 64,
+      "max_cpu_concurrency": 64
+    },
+    "scaling": {
+      "policy": "queue",
+      "queue": {
+        "length_thresholds": [5, 10, 15, 20],
+        "scale_steps": [4, 8, 12, 16],
+        "scale_in_utilization": 0.4,
+        "scale_in_step": 4
+      },
+      "reactive": {
+        "cpu_utilization_thresholds": [0.6, 0.7, 0.8],
+        "scale_steps": [8, 12, 16],
+        "scale_in_utilization": 0.2,
+        "scale_in_step": 8
+      },
+      "predictive": {
+        "growth_factor": 1.2,
+        "decline_factor": 0.75,
+        "history": 3,
+        "observation_interval": 10000,
+        "scale_step": 4,
+        "utilization_ceiling": 0.75
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "name": "dwaas_case",
+      "architecture": "DWAAS",
+      "dataset": 999,
+      "nodes": 4,
+      "instance": 0,
+      "hit_rate": 0.8,
+      "network_bandwidth": 10,
+      "io_bandwidth": 650,
+      "memory_bandwidth": 40000,
+      "cold_start": 0,
+      "runs": [
+        {
+          "name": "dwaas_queue_autoscale",
+          "scheduling": {
+            "policy": "sjf",
+            "max_io_concurrency": 24,
+            "max_cpu_concurrency": 16
+          }
+        }
+      ]
+    },
+    {
+      "name": "elastic_pool_case",
+      "architecture": "ELASTIC_POOL",
+      "dataset": 999,
+      "vpu": 16,
+      "nodes": 1,
+      "hit_rate": 0.9,
+      "network_bandwidth": 10,
+      "io_bandwidth": 1200,
+      "memory_bandwidth": 40000,
+      "cold_start": 120,
+      "runs": [
+        {
+          "name": "ep_reactive_scaling",
+          "scheduling": {
+            "policy": "fcfs",
+            "max_io_concurrency": 32,
+            "max_cpu_concurrency": 32
+          },
+          "scaling": {
+            "policy": "reactive",
+            "reactive": {
+              "cpu_utilization_thresholds": [0.6, 0.75, 0.85],
+              "scale_steps": [4, 8, 12],
+              "scale_in_utilization": 0.25,
+              "scale_in_step": 4
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "qaas_case",
+      "architecture": "QAAS",
+      "dataset": 999,
+      "nodes": 0,
+      "vpu": 0,
+      "hit_rate": 0.0,
+      "network_bandwidth": 10,
+      "io_bandwidth": 0,
+      "memory_bandwidth": 0,
+      "cold_start": 0,
+      "total_memory_capacity_mb": 0,
+      "runs": [
+        {
+          "name": "qaas_fcfs_baseline"
+        }
+      ]
+    }
+  ]
+}

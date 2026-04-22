@@ -1,194 +1,262 @@
-# scheduling.py
-
 from collections import deque
 import heapq
-from typing import List
 import logging
-
+from enum import IntEnum
+from typing import List
+from cloudglide.config import ArchitectureType
 from cloudglide.job import Job
+from cloudglide.qaas_slot_management import qaas_slot_management_scheduler
 
 
-def check_duplicate_job_ids(jobs: List[Job]) -> List[Job]:
+# ----------------------------
+# Scheduling Policy Enum
+# ----------------------------
+class SchedulingPolicy(IntEnum):
+    FCFS = 0
+    SJF = 1
+    LJF = 2
+    MULTI = 3    # placeholder for future multi-queue or hybrid strategy
+
+
+# ----------------------------
+# Generic Helpers
+# ----------------------------
+def pick_jobs_by_metric(queue: deque, metric: str, ascending=True, limit=None) -> List[Job]:
     """
-    Check for duplicate job IDs in the list of jobs.
-
-    Args:
-        jobs (List[Job]): List of Job instances.
-
-    Returns:
-        List[Job]: List of duplicate Job instances.
+    Selects up to 'limit' jobs from queue ordered by a given metric (ascending or descending).
+    Removes the selected jobs from the original queue.
     """
-    job_ids = set()
-    duplicates = []
+    sign = 1 if ascending else -1
+    heap = [(sign * getattr(j, metric), j.job_id, j) for j in queue]
+    heapq.heapify(heap)
+    selected = []
+    for _ in range(limit or len(heap)):
+        if not heap:
+            break
+        _, _, job = heapq.heappop(heap)
+        queue.remove(job)
+        selected.append(job)
+    return selected
+
+
+def age_jobs_delay(jobs: deque, attr: str, dt: float):
+    """Increment a delay field (queueing_delay or buffer_delay) for all jobs."""
     for job in jobs:
-        job_id = job.job_id
-        if job_id in job_ids:
-            duplicates.append(job)
-        else:
-            job_ids.add(job_id)
-    return duplicates
+        setattr(job, attr, getattr(job, attr) + dt)
 
 
+# ----------------------------
+# Individual Scheduling Strategies
+# ----------------------------
+def fcfs_policy(source_q: deque, target_q: deque, slots: int, now: float):
+    """
+    First-Come-First-Served (FIFO)
+    """
+    for _ in range(slots):
+        if not source_q:
+            break
+        job = source_q.popleft()
+        if job.start_timestamp == 0.0:
+            job.start_timestamp = now
+        target_q.append(job)
+
+
+def sjf_policy(source_q: deque, target_q: deque, slots: int, now: float, metric: str = "data_scanned"):
+    """
+    Shortest Job First (ascending by given metric)
+    """
+    selected = pick_jobs_by_metric(source_q, metric=metric, ascending=True, limit=slots)
+    for job in selected:
+        if job.start_timestamp == 0.0:
+            job.start_timestamp = now
+        target_q.append(job)
+
+
+def ljf_policy(source_q: deque, target_q: deque, slots: int, now: float, metric: str = "data_scanned"):
+    """
+    Longest Job First (descending by given metric)
+    """
+    selected = pick_jobs_by_metric(source_q, metric=metric, ascending=False, limit=slots)
+    for job in selected:
+        if job.start_timestamp == 0.0:
+            job.start_timestamp = now
+        target_q.append(job)
+
+
+def multi_queue_policy(source_q: deque, target_q: deque, slots: int, now: float, options=None):
+    """
+    Multi-level queue policy. Each queue definition can specify its own
+    priority (order in the list), selection criteria, ordering, and per-queue
+    concurrency cap. When no definition is provided, fall back to FCFS.
+    """
+    queue_defs = (options or {}).get("multi_level_queues", []) if options else []
+    if not queue_defs:
+        fcfs_policy(source_q, target_q, slots, now)
+        return
+
+    remaining = slots
+    for queue_def in queue_defs:
+        if remaining <= 0:
+            break
+        metric = queue_def.get("criteria", "queueing_delay")
+        order = queue_def.get("order", "asc").lower()
+        ascending = order != "desc"
+        limit = queue_def.get("max_concurrency")
+        capacity = min(limit if limit is not None else remaining, remaining)
+        selected = pick_jobs_by_metric(
+            source_q,
+            metric=metric,
+            ascending=ascending,
+            limit=capacity,
+        )
+        for job in selected:
+            if job.start_timestamp == 0.0:
+                job.start_timestamp = now
+            target_q.append(job)
+        remaining -= len(selected)
+
+    if remaining > 0 and source_q:
+        fcfs_policy(source_q, target_q, remaining, now)
+
+
+# ----------------------------
+# I/O Scheduler
+# ----------------------------
 def io_scheduler(
     scheduling: int,
     architecture: int,
-    current_second: float,
-    second_range,
+    now: float,
+    dt: float,
     jobs: List[Job],
     waiting_jobs: deque,
     io_jobs: deque,
     cpu_cores: int,
-    phase
+    phase: str,
+    options=None,
+    config=None,
+    cpu_jobs=None,
 ):
-    """
-    Schedule I/O jobs based on the scheduling strategy and architecture.
-
-    Args:
-        scheduling (int): Scheduling strategy identifier.
-        architecture (int): Architecture type identifier.
-        current_second (float): Current simulation second.
-        jobs (List[Job]): List of all Job instances.
-        waiting_jobs (deque): Queue of waiting jobs.
-        io_jobs (deque): Queue of I/O jobs.
-        cpu_cores (int): Number of CPU cores available.
-        second_range (float): Simulation time step.
-        num_queues (int): Number of job queues.
-        job_queues (List[List[Job]]): List of job queues.
-    """
-    # Only do anything at all on arrival, io_done, or scale_check
     if phase not in ("arrival", "io_done", "scale_check"):
         return
-            
-        # Compute base capacity (cpu_cores, or unlimited under QaaS)
-    if architecture < 3:
-        base_capacity = cpu_cores
+
+    # Determine base capacity
+    if architecture in (
+        ArchitectureType.DWAAS,
+        ArchitectureType.DWAAS_AUTOSCALING,
+        ArchitectureType.ELASTIC_POOL,
+    ):
+        capacity = cpu_cores
     else:
-        base_capacity = len(waiting_jobs)
+        capacity = len(jobs)
 
-    # Give yourself one extra slot if an I/O just completed
-    capacity = base_capacity + (1 if phase == "io_done" else 0)
+    if phase == "io_done":
+        capacity += 1  # allow refill immediately after a completion
 
-    # If we’re already at or above capacity, just age queueing delays
+    # Optional concurrency ceiling
+    if options:
+        max_active = options.get("max_io_concurrency")
+        if max_active is not None:
+            capacity = min(capacity, max_active)
+
+    # Check if QaaS slot management is active
+    if architecture in (ArchitectureType.QAAS, ArchitectureType.QAAS_CAPACITY) and config:
+        # Check if any slot management policies are enabled
+        has_strict_priority = getattr(config, 'qaas_strict_priority', False)
+        has_fixed_ratio = getattr(config, 'qaas_fixed_ratio', 0.0) > 0.0
+        baseline_slots = getattr(config, 'qaas_baseline_slots', 400)
+
+        if has_strict_priority or has_fixed_ratio:
+            # Use QaaS slot management scheduler
+            if cpu_jobs is None:
+                cpu_jobs = deque()  # fallback if not provided
+
+            qaas_slot_management_scheduler(
+                waiting_jobs=waiting_jobs,
+                io_jobs=io_jobs,
+                cpu_jobs=cpu_jobs,
+                baseline_slots=baseline_slots,
+                now=now,
+                strict_priority=has_strict_priority,
+                fixed_ratio=has_fixed_ratio
+            )
+            # Age remaining jobs
+            age_jobs_delay(waiting_jobs, "queueing_delay", dt)
+            return
+
+    # If full, just age delays
     if len(io_jobs) >= capacity:
-        for job in waiting_jobs:
-            job.queueing_delay += second_range / 1000.0
+        age_jobs_delay(waiting_jobs, "queueing_delay", dt)
         return
 
-    # How many new slots to fill now?
     slots = capacity - len(io_jobs)
+    policy = SchedulingPolicy(scheduling)
 
-    # FIFO / FCFS path
-    if scheduling in (0, 4):
-        for _ in range(slots):
-            if not waiting_jobs:
-                break
-            job = waiting_jobs.popleft()
-            if job.start_timestamp == 0.0:
-                job.start_timestamp = current_second
-            job.queueing_delay = (current_second - job.start) / 1000.0
-            io_jobs.append(job)
-        return
+    if policy == SchedulingPolicy.FCFS:
+        fcfs_policy(waiting_jobs, io_jobs, slots, now)
+    elif policy == SchedulingPolicy.SJF:
+        sjf_policy(waiting_jobs, io_jobs, slots, now, metric="data_scanned")
+    elif policy == SchedulingPolicy.LJF:
+        ljf_policy(waiting_jobs, io_jobs, slots, now, metric="data_scanned")
+    else:
+        multi_queue_policy(waiting_jobs, io_jobs, slots, now, options or {})
 
-    # SJF / LJF path: build a one‐time heap of size len(waiting_jobs)
-    heap = []
-    for idx, job in enumerate(waiting_jobs):
-        key = job.data_scanned if scheduling == 1 else -job.data_scanned
-        # push (key, idx, job) so that if two keys tie, idx breaks it
-        heap.append((key, idx, job))
-    heapq.heapify(heap)
+    # logging.debug(f"[{now/1000:.1f}s] I/O Scheduler: policy={policy.name}, added={slots}")
 
-    for _ in range(slots):
-        if not heap:
-            break
-        _, _, job = heapq.heappop(heap)
-        waiting_jobs.remove(job)    # O(n), but done only `slots` times
-        if job.start_timestamp == 0.0:
-            job.start_timestamp = current_second
-        job.queueing_delay = (current_second - job.start) / 1000.0
-        io_jobs.append(job)
 
+# ----------------------------
+# CPU Scheduler
+# ----------------------------
 def cpu_scheduler(
     scheduling: int,
     architecture: int,
-    current_second: float,
+    now: float,
     jobs: List[Job],
     buffer_jobs: deque,
     cpu_jobs: deque,
     cpu_cores: int,
     memory: List[float],
-    second_range: float,
-    phase
+    dt: float,
+    phase: str,
+    config,
+    options=None,
 ):
-    """
-    Schedule CPU jobs based on the scheduling strategy and architecture.
-
-    Args:
-        scheduling (int): Scheduling strategy identifier.
-        architecture (int): Architecture type identifier.
-        current_second (float): Current simulation second.
-        buffer_jobs (deque): Queue of buffered jobs.
-        cpu_jobs (deque): Queue of CPU jobs.
-        cpu_cores (int): Number of CPU cores available.
-        memory (List[float]): List containing current memory usage.
-        second_range (float): Simulation time step.
-    """
-    # --- early exit ---
     if phase not in ("arrival", "cpu_done", "scale_check"):
         return
 
-    # 1) Compute *base* free slots
-    if architecture < 3:
+    if architecture in (
+        ArchitectureType.DWAAS,
+        ArchitectureType.DWAAS_AUTOSCALING,
+        ArchitectureType.ELASTIC_POOL,
+    ):
         base_free = cpu_cores - len(cpu_jobs)
     else:
-        # QaaS / elastic pool override: can pull all buffer_jobs
         base_free = len(buffer_jobs)
 
-    # 2) Give yourself an extra slot if this was a CPU completion
     free_slots = base_free + (1 if phase == "cpu_done" else 0)
-
-    # 3) If no slots, just age delays
+    if options:
+        max_cpu = options.get("max_cpu_concurrency")
+        if max_cpu is not None:
+            free_slots = min(free_slots, max_cpu)
     if free_slots <= 0:
-        for job in buffer_jobs:
-            job.buffer_delay += second_range / 1000.0
+        age_jobs_delay(buffer_jobs, "buffer_delay", dt)
         return
 
-    # 4) Now your normal FCFS / SJF / LJF / priority logic, e.g.:
-    #    FCFS:
-    if scheduling in (0, 4):
-        for _ in range(free_slots):
-            if not buffer_jobs: break
-            job = buffer_jobs.popleft()
-            if job.start_timestamp == 0.0:
-                job.start_timestamp = current_second
-            memory[0] += job.data_scanned / 4
-            cpu_jobs.append(job)
-        for job in buffer_jobs:
-            job.buffer_delay += second_range / 1000.0
-        return
+    policy = SchedulingPolicy(scheduling)
+    if policy == SchedulingPolicy.FCFS:
+        fcfs_policy(buffer_jobs, cpu_jobs, free_slots, now)
+    elif policy == SchedulingPolicy.SJF:
+        sjf_policy(buffer_jobs, cpu_jobs, free_slots, now, metric="cpu_time")
+    elif policy == SchedulingPolicy.LJF:
+        ljf_policy(buffer_jobs, cpu_jobs, free_slots, now, metric="cpu_time")
+    else:
+        multi_queue_policy(buffer_jobs, cpu_jobs, free_slots, now)
 
-    #    SJF / LJF:
-    if scheduling in (1,2):
-        sign = 1 if scheduling==1 else -1
-        # Build a heap of (key, job_id, job) so ties in key fall back to job_id:
-        heap = [
-            (sign * job.cpu_time, job.job_id, job)
-            for job in buffer_jobs
-        ]
-        heapq.heapify(heap)
+    # Track memory usage
+    for job in list(cpu_jobs)[-free_slots:]:
+        memory[0] += job.data_scanned * config.materialization_fraction
 
-        # Pull at most free_slots jobs off that heap
-        for _ in range(free_slots):
-            if not heap:
-                break
-            _, _, job = heapq.heappop(heap)
-            buffer_jobs.remove(job)
-            if job.start_timestamp == 0.0:
-                job.start_timestamp = current_second
-            memory[0] += job.data_scanned / 4
-            cpu_jobs.append(job)
 
-        # Age any that remain
-        for job in buffer_jobs:
-            job.buffer_delay += second_range / 1000.0
+    # Age remaining jobs
+    age_jobs_delay(buffer_jobs, "buffer_delay", dt)
 
-        return
+    # logging.debug(f"[{now/1000:.1f}s] CPU Scheduler: policy={policy.name}, added={free_slots}, mem={memory[0]:.2f}")

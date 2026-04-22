@@ -159,7 +159,7 @@ def caching():
         f'{prefix}_3.csv',
         f'{prefix}_4.csv'
     ]
-    
+
     process_and_plot_caching(output_files)
 
 ##############################################################################
@@ -268,12 +268,12 @@ def workload_patterns():
 
 # Example 7: Cold Starts
 def cold_starts():
-    
+
     prefix = "cloudglide/output_simulation/cold"
     run_example("cold_starts",
                 "cloudglide/simulations/use_cases.json",
                 output_prefix=prefix)
-    
+
     output_files = [
         f'{prefix}_1.csv',
         f'{prefix}_2.csv',
@@ -284,7 +284,7 @@ def cold_starts():
         f'{prefix}_7.csv',
         f'{prefix}_8.csv'
     ]
-    
+
     process_and_plot_cold_starts(output_files)
 
 # Example 8: Concurrency
@@ -295,7 +295,7 @@ def concurrency():
                 output_prefix=prefix)
     # Suppose you know which CSVs get produced:
     output_file = f'{prefix}_1.csv'
-    
+
     plot_concurrency(output_file)
 
 ##############################################################################

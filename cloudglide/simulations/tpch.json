@@ -1,47 +1,224 @@
 {
-    "tpch_all": {
-        "architecture_values": [0],
-        "scheduling_values": [1],
-        "nodes_values": [16],
-        "vpu_values": [1],
-        "scaling_values": [1],
-        "cold_starts_values": [180],
-        "hit_rate_values": [1],
-        "instance_values": [4],
-        "arrival_rate_values": [0.1],
-        "network_bandwidth_values": [10],
-        "io_bandwidth_values": [1],
-        "memory_bandwidth_values": [1],
-        "dataset_values": [997]
+  "defaults": {
+    "simulation": {
+      "interrupt_probability": 0.01,
+      "interrupt_duration": 6000,
+      "logging_interval": 60,
+      "default_max_duration": 108000,
+      "default_estimator": "pm",
+      "pm_p": 4.0,
+      "delta": 0.3,
+      "queue_agg": "sum",
+      "materialization_fraction": 0.25,
+      "parallelizable_portion": 0.9,
+      "s3_bandwidth": 1000
     },
-    "tpch_concurrency": {
-        "architecture_values": [0],
-        "scheduling_values": [1],
-        "nodes_values": [2],
-        "vpu_values": [1],
-        "scaling_values": [1],
-        "cold_starts_values": [180],
-        "hit_rate_values": [1],
-        "instance_values": [0],
-        "arrival_rate_values": [0.1],
-        "network_bandwidth_values": [10],
-        "io_bandwidth_values": [1],
-        "memory_bandwidth_values": [1],
-        "dataset_values": [998]
+    "dwaas": {
+      "cost_per_second_redshift": 0.00030166666,
+      "spot_discount": 0.5,
+      "cold_start_delay": 60.0
     },
-     "concurrency_test": {
-        "architecture_values": [0],
-        "scheduling_values": [1],
-        "nodes_values": [16],
-        "vpu_values": [1],
-        "scaling_values": [1],
-        "cold_starts_values": [180],
-        "hit_rate_values": [1],
-        "instance_values": [1],
-        "arrival_rate_values": [0.1],
-        "network_bandwidth_values": [10],
-        "io_bandwidth_values": [1],
-        "memory_bandwidth_values": [1],
-        "dataset_values": [997]
+    "ep": {
+      "cost_per_rpu_hour": 0.375,
+      "cache_warmup_gamma": 0.05,
+      "cold_start_delay": 120.0
+    },
+    "qaas": {
+      "cost_per_slot_hour": 0.04,
+      "qaas_cost_per_tb": 5.0,
+      "qaas_io_per_core_bw": 150,
+      "qaas_shuffle_bw_per_core": 50,
+      "qaas_base_cores": 4,
+      "qaas_base_time_limit": 2,
+      "core_alloc_window": 10.0
+    },
+    "scheduling": {
+      "policy": "fcfs",
+      "max_io_concurrency": 64,
+      "max_cpu_concurrency": 64
+    },
+    "scaling": {
+      "policy": "queue",
+      "queue": {
+        "length_thresholds": [5, 10, 15, 20],
+        "scale_steps": [4, 8, 12, 16],
+        "scale_in_utilization": 0.4,
+        "scale_in_step": 4
+      },
+      "reactive": {
+        "cpu_utilization_thresholds": [0.6, 0.7, 0.8],
+        "scale_steps": [8, 12, 16],
+        "scale_in_utilization": 0.2,
+        "scale_in_step": 8
+      },
+      "predictive": {
+        "history": 3,
+        "observation_interval": 10000,
+        "growth_factor": 1.2,
+        "decline_factor": 0.75,
+        "utilization_ceiling": 0.75,
+        "scale_step": 4
+      }
     }
+  },
+  "scenarios": [
+    {
+      "name": "tpch_all",
+      "architecture": "QAAS",
+      "dataset": 999,
+      "nodes": 0,
+      "vpu": 0,
+      "hit_rate": 0.0,
+      "instance": 0,
+      "network_bandwidth": 10000,
+      "io_bandwidth": 0,
+      "memory_bandwidth": 0,
+      "total_memory_capacity_mb": 0,
+      "cold_start": 0,
+      "runs": [
+        {
+          "name": "tpch_fcfs_base",
+          "scheduling": {
+            "policy": "fcfs",
+            "max_io_concurrency": 32,
+            "max_cpu_concurrency": 16
+          },
+          "scaling": {
+            "policy": "queue",
+            "queue": {
+              "length_thresholds": [4, 8, 12],
+              "scale_steps": [2, 4, 8]
+            }
+          }
+        },
+        {
+          "name": "tpch_sjf_priority",
+          "scheduling": {
+            "policy": "sjf",
+            "max_io_concurrency": 48,
+            "max_cpu_concurrency": 24
+          },
+          "scaling": {
+            "policy": "reactive",
+            "reactive": {
+              "cpu_utilization_thresholds": [0.5, 0.7, 0.85],
+              "scale_steps": [4, 8, 16],
+              "scale_in_utilization": 0.2
+            }
+          }
+        },
+        {
+          "name": "tpch_multi_queue",
+          "scheduling": {
+            "policy": "multi_level",
+            "multi_level_queues": [
+              {
+                "name": "latency_sensitive",
+                "criteria": "queueing_delay",
+                "order": "desc",
+                "max_concurrency": 4
+              },
+              {
+                "name": "short_jobs",
+                "criteria": "data_scanned",
+                "order": "asc",
+                "max_concurrency": 8
+              }
+            ],
+            "max_io_concurrency": 40,
+            "max_cpu_concurrency": 32
+          },
+          "scaling": {
+            "policy": "predictive",
+            "predictive": {
+              "growth_factor": 1.15,
+              "decline_factor": 0.8,
+              "history": 4,
+              "observation_interval": 8000,
+              "scale_step": 4,
+              "utilization_ceiling": 0.7
+            }
+          }
+        },
+        {
+          "name": "tpch_autoscale_spot",
+          "scheduling": {
+            "policy": "ljf",
+            "max_io_concurrency": 20,
+            "max_cpu_concurrency": 20
+          },
+          "scaling": {
+            "policy": "reactive",
+            "reactive": {
+              "cpu_utilization_thresholds": [0.65, 0.8],
+              "scale_steps": [8, 12],
+              "scale_in_utilization": 0.25
+            }
+          },
+          "config_overrides": {
+            "use_spot_instances": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "tpch_concurrency",
+      "architecture": "DWAAS",
+      "dataset": 998,
+      "nodes": 2,
+      "hit_rate": 1.0,
+      "instance": 0,
+      "network_bandwidth": 10,
+      "io_bandwidth": 1,
+      "memory_bandwidth": 1,
+      "cold_start": 180,
+      "runs": [
+        {
+          "name": "tpch_concurrency_queue",
+          "scheduling": {
+            "policy": "sjf",
+            "max_io_concurrency": 12,
+            "max_cpu_concurrency": 12
+          },
+          "scaling": {
+            "policy": "queue",
+            "queue": {
+              "length_thresholds": [4, 6, 10],
+              "scale_steps": [2, 4, 6]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "concurrency_test",
+      "architecture": "DWAAS",
+      "dataset": 997,
+      "nodes": 16,
+      "hit_rate": 1.0,
+      "instance": 1,
+      "network_bandwidth": 10,
+      "io_bandwidth": 1,
+      "memory_bandwidth": 1,
+      "cold_start": 180,
+      "runs": [
+        {
+          "name": "concurrency_sjf",
+          "scheduling": {
+            "policy": "sjf",
+            "max_io_concurrency": 100,
+            "max_cpu_concurrency": 64
+          },
+          "scaling": {
+            "policy": "reactive",
+            "reactive": {
+              "cpu_utilization_thresholds": [0.7, 0.85],
+              "scale_steps": [8, 16],
+              "scale_in_utilization": 0.25
+            }
+          }
+        }
+      ]
+    }
+  ]
 }

@@ -1,0 +1,178 @@
+{
+  "defaults": {
+    "simulation": {
+      "scale_factor_min": 1,
+      "scale_factor_max": 100,
+      "shuffle_percentage_min": 0.1,
+      "shuffle_percentage_max": 0.35,
+      "interrupt_probability": 0.01,
+      "interrupt_duration": 6000,
+      "logging_interval": 60,
+      "default_max_duration": 108000,
+      "default_estimator": "pm",
+      "pm_p": 4.0,
+      "delta": 0.3,
+      "queue_agg": "sum",
+      "materialization_fraction": 0.25,
+      "parallelizable_portion": 0.9,
+      "s3_bandwidth": 1000
+    },
+    "qaas": {
+      "cost_per_slot_hour": 0.04,
+      "qaas_cost_per_tb": 5.0,
+      "qaas_io_per_core_bw": 150,
+      "qaas_shuffle_bw_per_core": 50,
+      "qaas_base_cores": 4,
+      "qaas_base_time_limit": 2,
+      "core_alloc_window": 10.0
+    }
+  },
+  "scenarios": [
+    {
+      "name": "scenario2_workload999",
+      "description": "QaaS Slot Management - Workload 999: 8 Policy Configurations",
+      "architecture": "QAAS",
+      "dataset": 999,
+      "runs": [
+        {
+          "name": "strict_priority_enabled",
+          "description": "Policy A: Strict Priority - Preemptive scheduling enabled (short jobs preempt long jobs)",
+          "config_overrides": {
+            "qaas_strict_priority": true
+          }
+        },
+        {
+          "name": "strict_priority_disabled",
+          "description": "Policy A: Strict Priority - Disabled (no preemption)",
+          "config_overrides": {
+            "qaas_strict_priority": false
+          }
+        },
+        {
+          "name": "fixed_ratio_70",
+          "description": "Policy B: Fixed Ratio - Reserve 70% of baseline slots (280/400) for short jobs",
+          "config_overrides": {
+            "qaas_fixed_ratio": 0.7,
+            "qaas_baseline_slots": 400
+          }
+        },
+        {
+          "name": "fixed_ratio_90",
+          "description": "Policy B: Fixed Ratio - Reserve 90% of baseline slots (360/400) for short jobs",
+          "config_overrides": {
+            "qaas_fixed_ratio": 0.9,
+            "qaas_baseline_slots": 400
+          }
+        },
+        {
+          "name": "slot_scaling_interrupt_2pct",
+          "description": "Policy C: Slot Scaling - 2% spot interruption frequency",
+          "config_overrides": {
+            "interrupt_probability": 0.02,
+            "use_spot_instances": true,
+            "spot_discount": 0.5
+          }
+        },
+        {
+          "name": "slot_scaling_interrupt_5pct",
+          "description": "Policy C: Slot Scaling - 5% spot interruption frequency",
+          "config_overrides": {
+            "interrupt_probability": 0.05,
+            "use_spot_instances": true,
+            "spot_discount": 0.5
+          }
+        },
+        {
+          "name": "slot_scaling_interrupt_10pct",
+          "description": "Policy C: Slot Scaling - 10% spot interruption frequency",
+          "config_overrides": {
+            "interrupt_probability": 0.10,
+            "use_spot_instances": true,
+            "spot_discount": 0.5
+          }
+        },
+        {
+          "name": "ondemand_default",
+          "description": "Baseline: Default QaaS on-demand (no spot, no special policies)",
+          "config_overrides": {
+            "interrupt_probability": 0.0,
+            "use_spot_instances": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "scenario2_workload998",
+      "description": "QaaS Slot Management - Workload 998: 8 Policy Configurations",
+      "architecture": "QAAS",
+      "dataset": 998,
+      "runs": [
+        {
+          "name": "strict_priority_enabled",
+          "description": "Policy A: Strict Priority - Preemptive scheduling enabled (short jobs preempt long jobs)",
+          "config_overrides": {
+            "qaas_strict_priority": true
+          }
+        },
+        {
+          "name": "strict_priority_disabled",
+          "description": "Policy A: Strict Priority - Disabled (no preemption)",
+          "config_overrides": {
+            "qaas_strict_priority": false
+          }
+        },
+        {
+          "name": "fixed_ratio_70",
+          "description": "Policy B: Fixed Ratio - Reserve 70% of baseline slots (280/400) for short jobs",
+          "config_overrides": {
+            "qaas_fixed_ratio": 0.7,
+            "qaas_baseline_slots": 400
+          }
+        },
+        {
+          "name": "fixed_ratio_90",
+          "description": "Policy B: Fixed Ratio - Reserve 90% of baseline slots (360/400) for short jobs",
+          "config_overrides": {
+            "qaas_fixed_ratio": 0.9,
+            "qaas_baseline_slots": 400
+          }
+        },
+        {
+          "name": "slot_scaling_interrupt_2pct",
+          "description": "Policy C: Slot Scaling - 2% spot interruption frequency",
+          "config_overrides": {
+            "interrupt_probability": 0.02,
+            "use_spot_instances": true,
+            "spot_discount": 0.5
+          }
+        },
+        {
+          "name": "slot_scaling_interrupt_5pct",
+          "description": "Policy C: Slot Scaling - 5% spot interruption frequency",
+          "config_overrides": {
+            "interrupt_probability": 0.05,
+            "use_spot_instances": true,
+            "spot_discount": 0.5
+          }
+        },
+        {
+          "name": "slot_scaling_interrupt_10pct",
+          "description": "Policy C: Slot Scaling - 10% spot interruption frequency",
+          "config_overrides": {
+            "interrupt_probability": 0.10,
+            "use_spot_instances": true,
+            "spot_discount": 0.5
+          }
+        },
+        {
+          "name": "ondemand_default",
+          "description": "Baseline: Default QaaS on-demand (no spot, no special policies)",
+          "config_overrides": {
+            "interrupt_probability": 0.0,
+            "use_spot_instances": false
+          }
+        }
+      ]
+    }
+  ]
+}

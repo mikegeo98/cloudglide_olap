@@ -1,5 +1,4 @@
 # job.py
-
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
@@ -31,6 +30,14 @@ class Job:
     query_exec_time: float = 0.0
     query_exec_time_queueing: float = 0.0
 
+    # Phase-specific timestamps
+    io_start_timestamp: float = 0.0
+    io_end_timestamp: float = 0.0
+    cpu_start_timestamp: float = 0.0
+    cpu_end_timestamp: float = 0.0
+    shuffle_start_timestamp: float = 0.0
+    shuffle_end_timestamp: float = 0.0
+
     # Scheduling metadata
     priority_level: int = 0
     scheduled: bool = field(init=False, default=False)
@@ -39,15 +46,18 @@ class Job:
     next_cpu_done:     float | None = field(init=False, default=None)
     dram_node_index: Optional[int] = field(init=False, default=None)
 
+    # per-estimator outputs
+    estimators: Dict[str, float] = field(default_factory=dict)
+    selected_estimator: str = ""
+    queue_total: float = 0.0
+
     def __post_init__(self):
         self.data_shuffle = self.calculate_data_shuffle()
         self.cpu_time_progress = self.cpu_time
         self.data_scanned_progress = self.data_scanned
 
     def calculate_data_shuffle(self) -> float:
-        """
-        Calculate the amount of data to shuffle based on the scale factor.
-        """
+
         if self.scale_factor <= 1:
             return 0.1 * self.data_scanned
         elif self.scale_factor >= 100:
@@ -57,10 +67,11 @@ class Job:
             percentage = 0.1 + ((self.scale_factor - 1) / 99) * 0.25
             return percentage * self.data_scanned
 
-    def reset_progress(self, current_second: float):
+    def reset_progress(self, current_second: float, config) -> None:
         """
-        Reset job progress upon interruption.
+        Reset job progress after interruption or cold start.
+        Uses cold_start_delay from the simulation config (seconds).
         """
         self.cpu_time_progress = self.cpu_time
         self.data_scanned_progress = self.data_scanned
-        self.start = current_second * 1000 + 60000  # Adjust start time
+        self.start = current_second + config.cold_start_delay

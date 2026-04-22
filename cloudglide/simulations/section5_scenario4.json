@@ -1,0 +1,620 @@
+{
+  "defaults": {
+    "simulation": {
+      "scale_factor_min": 1,
+      "scale_factor_max": 100,
+      "shuffle_percentage_min": 0.1,
+      "shuffle_percentage_max": 0.35,
+      "interrupt_probability": 0.01,
+      "interrupt_duration": 6000,
+      "logging_interval": 60,
+      "default_max_duration": 108000,
+      "default_estimator": "pm",
+      "pm_p": 4.0,
+      "delta": 0.3,
+      "queue_agg": "sum",
+      "materialization_fraction": 0.25,
+      "parallelizable_portion": 0.9,
+      "s3_bandwidth": 1000
+    },
+    "dwaas": {
+      "cost_per_second_redshift": 0.00030166666,
+      "spot_discount": 0.5,
+      "use_spot_instances": false,
+      "cold_start_delay": 60.0
+    },
+    "ep": {
+      "cost_per_rpu_hour": 0.375,
+      "cache_warmup_gamma": 0.05,
+      "cold_start_delay": 120.0
+    },
+    "scheduling": {
+      "policy": "sjf",
+      "max_io_concurrency": null,
+      "max_cpu_concurrency": null
+    },
+    "scaling": {
+      "policy": "queue",
+      "queue": {
+        "length_thresholds": [5, 10, 15, 20],
+        "scale_steps": [4, 8, 12, 16],
+        "scale_in_utilization": 0.4,
+        "scale_in_step": 4
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "name": "scenario4_1_small_resources",
+      "description": "Subscenario 4-1: Small Resource Provisioning (10 runs) - DWaaS 2,4,8 nodes / AutoDWaaS 2,4,8 / EP 8,16,24 VPUs / QaaS",
+      "dataset": 999,
+      "hit_rate": 0.7,
+      "runs": [
+        {
+          "name": "dwaas_2nodes",
+          "architecture": "DWAAS",
+          "nodes": 2,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 64000
+        },
+        {
+          "name": "dwaas_4nodes",
+          "architecture": "DWAAS",
+          "nodes": 4,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 128000
+        },
+        {
+          "name": "dwaas_8nodes",
+          "architecture": "DWAAS",
+          "nodes": 8,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 256000
+        },
+        {
+          "name": "autodwaas_2nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 2,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 64000,
+          "cold_start": 60.0
+        },
+        {
+          "name": "autodwaas_4nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 4,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 128000,
+          "cold_start": 60.0
+        },
+        {
+          "name": "autodwaas_8nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 8,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 256000,
+          "cold_start": 60.0
+        },
+        {
+          "name": "ep_8vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 8,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0
+        },
+        {
+          "name": "ep_16vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 16,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0
+        },
+        {
+          "name": "ep_24vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 24,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0
+        },
+        {
+          "name": "qaas",
+          "architecture": "QAAS"
+        }
+      ]
+    },
+    {
+      "name": "scenario4_2_medium_large_resources",
+      "description": "Subscenario 4-2: Medium-Large Resource Provisioning (12 runs) - DWaaS 8,16,24,32 / AutoDWaaS 8,16,24,32 / EP 16,32,64 VPUs / QaaS",
+      "dataset": 999,
+      "hit_rate": 0.7,
+      "runs": [
+        {
+          "name": "dwaas_8nodes",
+          "architecture": "DWAAS",
+          "nodes": 8,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 256000
+        },
+        {
+          "name": "dwaas_16nodes",
+          "architecture": "DWAAS",
+          "nodes": 16,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 512000
+        },
+        {
+          "name": "dwaas_24nodes",
+          "architecture": "DWAAS",
+          "nodes": 24,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 768000
+        },
+        {
+          "name": "dwaas_32nodes",
+          "architecture": "DWAAS",
+          "nodes": 32,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 1024000
+        },
+        {
+          "name": "autodwaas_8nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 8,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 256000,
+          "cold_start": 60.0
+        },
+        {
+          "name": "autodwaas_16nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 16,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 512000,
+          "cold_start": 60.0
+        },
+        {
+          "name": "autodwaas_24nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 24,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 768000,
+          "cold_start": 60.0
+        },
+        {
+          "name": "autodwaas_32nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 32,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 1024000,
+          "cold_start": 60.0
+        },
+        {
+          "name": "ep_16vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 16,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0
+        },
+        {
+          "name": "ep_32vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 32,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0
+        },
+        {
+          "name": "ep_64vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 64,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0
+        },
+        {
+          "name": "qaas",
+          "architecture": "QAAS"
+        }
+      ]
+    },
+    {
+      "name": "scenario4_3_varied_ep_resources",
+      "description": "Subscenario 4-3: Varied EP Resources (11 runs) - DWaaS 4,8,16 / AutoDWaaS 4,8,16 / EP 8,16,32,64 VPUs / QaaS",
+      "dataset": 999,
+      "hit_rate": 0.7,
+      "runs": [
+        {
+          "name": "dwaas_4nodes",
+          "architecture": "DWAAS",
+          "nodes": 4,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 128000
+        },
+        {
+          "name": "dwaas_8nodes",
+          "architecture": "DWAAS",
+          "nodes": 8,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 256000
+        },
+        {
+          "name": "dwaas_16nodes",
+          "architecture": "DWAAS",
+          "nodes": 16,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 512000
+        },
+        {
+          "name": "autodwaas_4nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 4,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 128000,
+          "cold_start": 60.0
+        },
+        {
+          "name": "autodwaas_8nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 8,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 256000,
+          "cold_start": 60.0
+        },
+        {
+          "name": "autodwaas_16nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 16,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 512000,
+          "cold_start": 60.0
+        },
+        {
+          "name": "ep_8vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 8,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0
+        },
+        {
+          "name": "ep_16vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 16,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0
+        },
+        {
+          "name": "ep_32vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 32,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0
+        },
+        {
+          "name": "ep_64vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 64,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0
+        },
+        {
+          "name": "qaas",
+          "architecture": "QAAS"
+        }
+      ]
+    },
+    {
+      "name": "scenario4_4_alternative_small",
+      "description": "Subscenario 4-4: Alternative Small Config (10 runs) - DWaaS 2,4,8 / AutoDWaaS 2,4,8 / EP 6,12,24 VPUs / QaaS",
+      "dataset": 999,
+      "hit_rate": 0.7,
+      "runs": [
+        {
+          "name": "dwaas_2nodes",
+          "architecture": "DWAAS",
+          "nodes": 2,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 64000
+        },
+        {
+          "name": "dwaas_4nodes",
+          "architecture": "DWAAS",
+          "nodes": 4,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 128000
+        },
+        {
+          "name": "dwaas_8nodes",
+          "architecture": "DWAAS",
+          "nodes": 8,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 256000
+        },
+        {
+          "name": "autodwaas_2nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 2,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 64000,
+          "cold_start": 60.0
+        },
+        {
+          "name": "autodwaas_4nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 4,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 128000,
+          "cold_start": 60.0
+        },
+        {
+          "name": "autodwaas_8nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 8,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 256000,
+          "cold_start": 60.0
+        },
+        {
+          "name": "ep_6vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 6,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0
+        },
+        {
+          "name": "ep_12vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 12,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0
+        },
+        {
+          "name": "ep_24vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 24,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0
+        },
+        {
+          "name": "qaas",
+          "architecture": "QAAS"
+        }
+      ]
+    },
+    {
+      "name": "scenario4_5_standard_config",
+      "description": "Subscenario 4-5: Standard Configuration (10 runs) - DWaaS 2,4,8 / AutoDWaaS 2,4,8 / EP 8,16,24 VPUs / QaaS",
+      "dataset": 999,
+      "hit_rate": 0.7,
+      "runs": [
+        {
+          "name": "dwaas_2nodes",
+          "architecture": "DWAAS",
+          "nodes": 2,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 64000
+        },
+        {
+          "name": "dwaas_4nodes",
+          "architecture": "DWAAS",
+          "nodes": 4,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 128000
+        },
+        {
+          "name": "dwaas_8nodes",
+          "architecture": "DWAAS",
+          "nodes": 8,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 256000
+        },
+        {
+          "name": "autodwaas_2nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 2,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 64000,
+          "cold_start": 60.0
+        },
+        {
+          "name": "autodwaas_4nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 4,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 128000,
+          "cold_start": 60.0
+        },
+        {
+          "name": "autodwaas_8nodes",
+          "architecture": "DWAAS_AUTOSCALING",
+          "nodes": 8,
+          "instance": 0,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 650,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 256000,
+          "cold_start": 60.0
+        },
+        {
+          "name": "ep_8vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 8,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0
+        },
+        {
+          "name": "ep_16vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 16,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0
+        },
+        {
+          "name": "ep_24vpu",
+          "architecture": "ELASTIC_POOL",
+          "vpu": 24,
+          "hit_rate": 0.8,
+          "network_bandwidth": 10000,
+          "io_bandwidth": 1200,
+          "memory_bandwidth": 40000,
+          "total_memory_capacity_mb": 96000,
+          "cold_start": 120.0
+        },
+        {
+          "name": "qaas",
+          "architecture": "QAAS"
+        }
+      ]
+    }
+  ]
+}
