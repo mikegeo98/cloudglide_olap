@@ -1,4 +1,4 @@
-cloudglide/output_simulation/
+cloudglide/output_simulation/*.csv
 __pycache__/
 cloudglide/__pycache__/
 cloudglide/output_visual/
