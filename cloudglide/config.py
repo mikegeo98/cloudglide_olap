@@ -346,7 +346,9 @@ DATASET_FILES = {
     20: "cloudglide/datasets/qs4_40_4f.csv",
     21: "cloudglide/datasets/pattern_2_50f.csv",
     22: "cloudglide/datasets/tenk.csv",
+    23: "cloudglide/datasets/faas_tpch_sf85.csv",
     997: "cloudglide/datasets/biggo_edited.csv",
     998: "cloudglide/datasets/concurrency.csv",
     999: "cloudglide/datasets/tpch_all_runs.csv",
+    1001: "cloudglide/datasets/custom.csv",
 }

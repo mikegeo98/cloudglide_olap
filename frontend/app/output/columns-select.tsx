@@ -1,0 +1,95 @@
+"use client"
+
+import { Checkbox } from "@/components/ui/checkbox"
+import { instanceTypes } from "@/lib/config"
+
+import { ColumnDef } from "@tanstack/react-table"
+
+export type SimRun = {
+    filename: string,
+    architecture: string | undefined,
+    nodes: number | undefined,
+    hit_rate: number | undefined,
+    instance: number | undefined,
+    scaling_policy: string | undefined,
+    scheduling_policy: string | undefined,
+    network_bandwidth: number | undefined,
+    cold_start: number | undefined,
+    vpu: number | undefined,
+}
+
+export const columns: ColumnDef<SimRun>[] = [
+    {
+        id: "select",
+        header: ({ table }) => (
+            <Checkbox
+                checked={
+                    table.getIsAllPageRowsSelected() ||
+                    (table.getIsSomePageRowsSelected() && "indeterminate")
+                }
+                onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+                aria-label="Select all"
+            />
+        ),
+        cell: ({ row }) => (
+            <Checkbox
+                checked={row.getIsSelected()}
+                onCheckedChange={(value) => row.toggleSelected(!!value)}
+                aria-label="Select row"
+            />
+        ),
+        enableSorting: false,
+        enableHiding: false,
+    },
+    {
+        id: "architecture",
+        accessorKey: "architecture",
+        header: "Architecture",
+    },
+    {
+        id: "nodes",
+        accessorKey: "nodes",
+        header: "Nodes",
+    },
+    {
+        id: "hit_rate",
+        accessorKey: "hit_rate",
+        header: "Hit Rate",
+    },
+    {
+        id: "instance",
+        accessorKey: "instance",
+        header: "Base Instance",
+        cell: ({ row }) => row.original.instance !== undefined ? instanceTypes[row.original.instance].name : null
+    },
+    {
+        id: "scaling_policy",
+        accessorKey: "scaling_policy",
+        header: "Scaling Policy",
+    },
+    {
+        id: "cold_start",
+        accessorKey: "cold_start",
+        header: "Cold Start Delay",
+    },
+    {
+        id: "scheduling_policy",
+        accessorKey: "scheduling_policy",
+        header: "Scheduling Policy",
+    },
+    {
+        id: "network_bandwidth",
+        accessorKey: "network_bandwidth",
+        header: "Network Bandwidth",
+    },
+    {
+        id: "vpu",
+        accessorKey: "vpu",
+        header: "Virtual Processing Units",
+    },
+    {
+        id: "filename",
+        accessorKey: "filename",
+        header: "Filename",
+    },
+]

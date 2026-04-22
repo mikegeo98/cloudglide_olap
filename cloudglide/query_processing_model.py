@@ -829,11 +829,66 @@ def simulate_io_faas(
     Returns:
         None (modifies io_jobs, finished_jobs, events in place).
     """
-    raise NotImplementedError(
-        "TODO: Implement FaaS I/O simulation. "
-        "Each function invocation reads from object storage (S3). "
-        "See docstring above for detailed requirements."
-    )
+    # Guard clauses
+    if phase not in ("arrival", "io_done", "scale_check"):
+        return
+    if not io_jobs:
+        return
+    
+    # Enforce FaaS concurrency limit - only process up to max concurrent functions
+    active_jobs = list(io_jobs)[:config.faas_concurrency_limit]
+    num_concurrent = len(active_jobs)
+
+    if num_concurrent == 0:
+        return
+
+    # Bandwidth per function: each FaaS invocation gets independent S3 bandwidth
+    # Use same unit convention as DWaaS I/O: bw in MB/s, data in MB, elapsed in ms
+    per_job_bw = config.s3_bandwidth
+
+    for job in active_jobs:
+        # Set I/O start timestamp on first entry
+        if job.io_start_timestamp == 0.0:
+            job.io_start_timestamp = current_second
+
+        # Check if job I/O is already complete
+        if job.data_scanned_progress == 0:
+            if job.io_end_timestamp == 0.0:
+                job.io_end_timestamp = current_second
+            # Remove from I/O queue and move to finished
+            io_jobs.remove(job)
+            if job not in buffer_jobs and job not in cpu_jobs:
+                finished_jobs.append(job)
+            continue
+
+        # Calculate elapsed time this tick
+        elapsed = current_second - max(job.start_timestamp, current_second - second_range)
+
+        # Use same unit convention as DWaaS I/O:
+        # needed = data_progress * 1000, avail = bw * elapsed_ms
+        needed = job.data_scanned_progress * 1000
+        avail = per_job_bw * elapsed
+
+        if needed > avail:
+            # Partial progress - job continues in next tick
+            job.data_scanned_progress -= avail / 1000
+            job.io_time += elapsed / 1000  # Convert to seconds
+
+            # Schedule completion event for remaining data
+            remaining = job.data_scanned_progress * 1000
+            finish_delta = remaining / per_job_bw if per_job_bw > 0 else float('inf')
+            schedule_event(job, current_second + finish_delta, 'io_done', events)
+        else:
+            # Job completes this tick - compute exact finish time
+            finish_delta = needed / per_job_bw if per_job_bw > 0 else 0
+            job.io_time += finish_delta / 1000  # Convert to seconds
+            job.data_scanned_progress = 0
+
+            if job.io_end_timestamp == 0.0:
+                job.io_end_timestamp = current_second + finish_delta
+
+            # Schedule io_done event at exact completion time
+            schedule_event(job, current_second + finish_delta, 'io_done', events)
 
 
 def simulate_cpu_faas(
@@ -883,9 +938,92 @@ def simulate_cpu_faas(
     Returns:
         int: Always 0 for FaaS (no infrastructure-level slot reporting).
     """
-    raise NotImplementedError(
-        "TODO: Implement FaaS CPU simulation. "
-        "Each function gets memory-proportional vCPUs. "
-        "Track GB-seconds for cost. Enforce max duration. "
-        "See docstring above for detailed requirements."
-    )
+    if not cpu_jobs:
+        return 0
+
+    # FaaS: vCPUs scale linearly with memory (AWS Lambda proportionality)
+    # 1 vCPU per 1769 MB of memory
+    vcpus_per_function = config.faas_memory_mb / 1769.0
+
+    # GB of memory for cost calculation
+    memory_gb = config.faas_memory_mb / 1024.0
+
+    to_remove = []
+
+    for job in list(cpu_jobs):
+        # Set CPU start timestamp on first entry
+        if job.cpu_start_timestamp == 0.0:
+            job.cpu_start_timestamp = current_second
+
+        # Calculate elapsed time this tick
+        elapsed = current_second - max(job.start_timestamp, current_second - second_range)
+
+        # Amdahl's Law: When vCPUs > 1, apply parallel speedup with diminishing returns
+        # This models multi-vCPU Lambda functions (high memory configs like 3GB+ get >1 vCPU)
+        p = config.parallelizable_portion
+        if vcpus_per_function > 1.0:
+            speedup = 1 / ((1 - p) + (p / vcpus_per_function))
+        else:
+            speedup = 1.0 # No parallelism penalty
+
+        # Check for timeout (max duration exceeded)
+        job_duration = current_second - job.cpu_start_timestamp
+        if job_duration >= config.faas_max_duration * 1000:  # Convert seconds to ms
+            # Job timed out - mark as complete but record timeout
+            job.cpu_time_progress = 0
+            if job.cpu_end_timestamp == 0.0:
+                job.cpu_end_timestamp = current_second
+
+            # Track GB-seconds for the max duration
+            gb_seconds = memory_gb * config.faas_max_duration
+            faas_gb_seconds[0] += gb_seconds
+
+            to_remove.append(job)
+            job_finalization(
+                job, memory, cpu_jobs, shuffle_jobs, finished_jobs,
+                io_jobs, waiting_jobs, current_second, config,
+            )
+            continue
+
+        # No shuffle phase in FaaS - functions are independent
+        # Amdahl's Law speedup S(N) already represents the speedup from N vCPUs
+        # over 1 vCPU, so work rate = speedup * elapsed (NOT vcpus * speedup)
+        work = speedup * elapsed
+
+        if job.cpu_time_progress > work:
+            # Partial progress - job continues
+            job.cpu_time_progress -= work
+            job.processing_time += elapsed / 1000
+
+            # Schedule cpu_done event
+            remaining = job.cpu_time_progress
+            rate = speedup
+            delta = remaining / rate if rate > 0 else float('inf')
+            schedule_event(job, current_second + delta, "cpu_done", events)
+        else:
+            # Job completes this tick
+            effective_rate = speedup
+            final_work_time = job.cpu_time_progress / effective_rate if effective_rate > 0 else 0
+            job.processing_time += final_work_time / 1000
+            job.cpu_time_progress = 0
+
+            if job.cpu_end_timestamp == 0.0:
+                job.cpu_end_timestamp = current_second + final_work_time
+
+            # Track GB-seconds for cost
+            # Duration is from CPU start to CPU end (in seconds)
+            duration_seconds = (job.cpu_end_timestamp - job.cpu_start_timestamp) / 1000
+            gb_seconds = memory_gb * duration_seconds
+            faas_gb_seconds[0] += gb_seconds
+
+            to_remove.append(job)
+            job_finalization(
+                job, memory, cpu_jobs, shuffle_jobs, finished_jobs,
+                io_jobs, waiting_jobs, current_second, config,
+            )
+
+    for job in to_remove:
+        cpu_jobs.remove(job)
+
+    # FaaS has no infrastructure-level slot reporting
+    return 0
